@@ -1,0 +1,16 @@
+{
+  "extends": "@tripic/tsconfig/base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "types": ["node"],
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "incremental": true,
+    "removeComments": true,
+    "isolatedModules": true,
+    "resolvePackageJsonExports": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["src", "test"]
+}

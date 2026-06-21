@@ -1,0 +1,12 @@
+{
+  "name": "@tripic/tsconfig",
+  "version": "0.0.0",
+  "description": "Tripic 공유 TypeScript 설정 (이름으로 extends 하여 상대경로 제거)",
+  "private": true,
+  "files": [
+    "base.json"
+  ],
+  "exports": {
+    "./base.json": "./base.json"
+  }
+}

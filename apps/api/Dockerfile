@@ -1,0 +1,66 @@
+# syntax=docker/dockerfile:1
+#
+# @tripic/api 컨테이너 이미지 (Northflank 배포용)
+#
+# 중요: 이 Dockerfile 은 pnpm 워크스페이스 루트를 빌드 컨텍스트로 가정한다.
+#   - 로컬 빌드:   docker build -f apps/api/Dockerfile -t tripic-api .
+#   - Northflank:  Build context = 레포 루트, Dockerfile path = apps/api/Dockerfile
+#
+# 멀티스테이지: build 단계에서 워크스페이스 전체 설치 후 api 빌드 →
+# pnpm deploy(injected, .npmrc) 로 prod 의존성만 추린 self-contained 산출물을 lean 런타임에 복사.
+
+# ---------- base (빌드 툴: corepack + 고정 pnpm) ----------
+FROM node:24.17.0-alpine3.24 AS base
+# PNPM_HOME 을 두어야 store 가 /pnpm/store 가 되고 아래 BuildKit 캐시 마운트가 실제로 동작한다.
+ENV PNPM_HOME=/pnpm
+ENV PATH="$PNPM_HOME:$PATH"
+# corepack enable 만 하면 최신 pnpm(11.x)을 받으므로 packageManager 와 동일 버전으로 고정.
+RUN corepack enable && corepack prepare pnpm@10.34.3 --activate
+WORKDIR /repo
+
+# ---------- build ----------
+FROM base AS build
+
+# 1) 매니페스트만 먼저 복사해 의존성 설치 레이어 캐싱
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc ./
+COPY packages/tsconfig/package.json packages/tsconfig/
+COPY packages/shared/package.json packages/shared/
+COPY apps/api/package.json apps/api/
+
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile
+
+# 2) 소스 복사 후 빌드
+COPY . .
+RUN pnpm --filter @tripic/api build
+
+# 3) prod 의존성만 추린 배포 산출물 생성 (node_modules + package.json)
+#    inject-workspace-packages=true (.npmrc) 기반 modern deploy
+RUN pnpm --filter @tripic/api --prod deploy /repo/deploy
+
+# ---------- runtime (lean: pnpm/corepack 불필요) ----------
+FROM node:24.17.0-alpine3.24 AS runtime
+ENV NODE_ENV=production
+ENV PORT=3000
+WORKDIR /app
+
+ARG APP_VERSION
+ARG COMMIT_SHA
+ENV APP_VERSION=${APP_VERSION:-}
+ENV COMMIT_SHA=${COMMIT_SHA:-}
+LABEL org.opencontainers.image.title="tripic-api" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.revision="${COMMIT_SHA}"
+
+# node 이미지 내장 비루트 사용자 'node' 로 실행
+COPY --from=build --chown=node:node /repo/deploy/node_modules ./node_modules
+COPY --from=build --chown=node:node /repo/deploy/package.json ./package.json
+COPY --from=build --chown=node:node /repo/apps/api/dist ./dist
+
+USER node
+EXPOSE 3000
+
+# Health check 는 이미지에 두지 않는다.
+# Northflank(쿠버네티스 기반)는 Docker HEALTHCHECK 를 무시하고 플랫폼 probe 를 사용하므로,
+# Northflank 설정에서 HTTP liveness/readiness probe 를 GET /health 로 지정한다.
+CMD ["node", "dist/src/main.js"]
