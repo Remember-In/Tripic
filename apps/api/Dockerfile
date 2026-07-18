@@ -10,7 +10,7 @@
 # pnpm deploy(injected, .npmrc) 로 prod 의존성만 추린 self-contained 산출물을 lean 런타임에 복사.
 
 # ---------- base (빌드 툴: corepack + 고정 pnpm) ----------
-FROM node:24.17.0-alpine3.24 AS base
+FROM node:24.18.0-alpine3.24 AS base
 # PNPM_HOME 을 두어야 store 가 /pnpm/store 가 되고 아래 BuildKit 캐시 마운트가 실제로 동작한다.
 ENV PNPM_HOME=/pnpm
 ENV PATH="$PNPM_HOME:$PATH"
@@ -39,7 +39,7 @@ RUN pnpm --filter @tripic/api build
 RUN pnpm --filter @tripic/api --prod deploy /repo/deploy
 
 # ---------- runtime (lean: pnpm/corepack 불필요) ----------
-FROM node:24.17.0-alpine3.24 AS runtime
+FROM node:24.18.0-alpine3.24 AS runtime
 ENV NODE_ENV=production
 ENV PORT=3000
 WORKDIR /app
