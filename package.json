@@ -37,7 +37,7 @@
     ],
     "overrides": {
       "@swc/cli>minimatch": "^10.2.5",
-      "file-type": "^21.3.4"
+      "file-type@<21.3.4": "^21.3.4"
     },
     "auditConfig": {
       "ignoreGhsas": [

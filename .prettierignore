@@ -1,0 +1,8 @@
+# 생성물은 포맷 대상이 아니다.
+# pnpm-lock.yaml: lint-staged 의 *.{json,md,yml,yaml} 글롭에 걸려 커밋마다 prettier 가 재포맷하고
+#   pnpm install 이 다시 pnpm 원형으로 되돌리는 왕복 churn 이 생긴다(한 줄 변경이 수천 줄 diff 로 부풀어
+#   리뷰와 머지를 방해한다). pnpm 이 유일한 소유자이므로 제외한다.
+pnpm-lock.yaml
+
+# 빌드 산출물: `pnpm format`(prettier --write .)이 dist 까지 훑는 것을 막는다.
+dist
