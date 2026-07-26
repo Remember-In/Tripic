@@ -44,6 +44,13 @@ ENV NODE_ENV=production
 ENV PORT=3000
 WORKDIR /app
 
+# 런타임은 node 바이너리만 쓴다(CMD 가 node 직접 실행). 이미지 내장 npm/corepack/yarn 은
+# 사용하지 않으면서 자체 의존성이 이미지 스캔에 잡히므로(npm 번들 brace-expansion 5.0.6 →
+# GHSA-mh99-v99m-4gvg 등) 제거해 공격 표면과 오탐을 함께 줄인다. COPY 앞에 두어 레이어를 캐싱한다.
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+    /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+    /opt/yarn-v* /usr/local/bin/yarn /usr/local/bin/yarnpkg
+
 ARG APP_VERSION
 ARG COMMIT_SHA
 ENV APP_VERSION=${APP_VERSION:-}
