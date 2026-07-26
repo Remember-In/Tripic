@@ -19,21 +19,21 @@
     "test:e2e": "vitest run --config vitest.config.e2e.ts"
   },
   "dependencies": {
-    "@nestjs/common": "^11.0.1",
-    "@nestjs/core": "^11.0.1",
-    "@nestjs/platform-express": "^11.0.1",
+    "@nestjs/common": "^11.1.28",
+    "@nestjs/core": "^11.1.28",
+    "@nestjs/platform-express": "^11.1.28",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
-    "@nestjs/schematics": "^11.0.0",
-    "@nestjs/testing": "^11.0.1",
-    "@swc/cli": "^0.7.0",
-    "@swc/core": "^1.10.0",
+    "@nestjs/schematics": "^11.1.0",
+    "@nestjs/testing": "^11.1.28",
+    "@swc/cli": "^0.7.10",
+    "@swc/core": "^1.15.46",
     "@tripic/tsconfig": "workspace:*",
-    "@types/node": "^24.0.0",
-    "pactum": "^3.7.0",
-    "unplugin-swc": "^1.5.1",
-    "vitest": "^3.0.0"
+    "@types/node": "^24.13.3",
+    "pactum": "^3.9.1",
+    "unplugin-swc": "^1.5.9",
+    "vitest": "^3.2.7"
   }
 }

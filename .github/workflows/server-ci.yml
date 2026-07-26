@@ -117,6 +117,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # 예외 목록은 package.json > pnpm.auditConfig.ignoreGhsas 에서 관리한다.
+      # GHSA-mh99-v99m-4gvg (brace-expansion DoS):
+      #   경로 @nestjs/cli > fork-ts-checker-webpack-plugin > minimatch@3 > brace-expansion@1
+      #   - 업스트림 미수정: @nestjs/cli 11.0.24(latest)가 fork-ts-checker 9.1.0을 정확히 핀하고,
+      #     9.1.0(마지막 배포판)이 minimatch ^3.0.4를 요구한다. brace-expansion 1.x 라인에 패치가 없다.
+      #   - override 불가: 패치본 5.0.8은 callable default export를 제거해(`{ expand }`) 소비자가 깨진다.
+      #   - 미실행 경로: nest-cli.json 이 builder=swc 이므로 webpack 빌더/fork-ts-checker는 실행되지 않는다.
+      #   상위 패키지가 minimatch를 올리면 이 예외를 제거할 것.
       - name: Audit dependencies
         run: pnpm audit --audit-level=high
 
