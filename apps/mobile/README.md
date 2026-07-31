@@ -1,27 +1,20 @@
-# @tripic/mobile (placeholder)
+# @tripic/mobile
 
-React Native 모바일 앱 자리입니다. **이번 백엔드 우선 세팅 단계에서는 스캐폴딩하지 않았습니다.**
+Expo Router 기반 Tripic 모바일 앱입니다.
 
-## 예정 스택 (PRD 10.2)
-
-- React Native + Expo + Expo Router
-- TypeScript
-- TanStack Query — 한국관광공사 OpenAPI 호출의 loading/error/retry 관리
-- Expo SQLite — 방문 기록 로컬 저장
-- Zustand (선택) — 선택 사진·임시 작성 상태
-
-## 책임 범위 (PRD 6.2 / 16)
-
-- 사진 EXIF의 GPS·촬영일시는 **앱 내부에서만** 처리한다.
-- 관광지 후보/상세 조회는 앱이 **한국관광공사 OpenAPI를 직접 호출**한다.
-- GPS 좌표·EXIF 원본 사진을 백엔드 서버로 전송하지 않는다.
-- 관광공사 원천 데이터를 로컬 DB에 저장/캐싱 서빙하지 않는다.
-
-## 스캐폴딩 시 (예정)
+## 실행
 
 ```bash
-# 예시 — 추후 확정
-pnpm create expo-app apps/mobile
+pnpm install
+pnpm --filter @tripic/mobile start
+pnpm --filter @tripic/mobile ios
+pnpm --filter @tripic/mobile android
 ```
 
-상세 화면/플로우는 [docs/05-screens.md](../../docs/05-screens.md), [docs/03-requirements-p0.md](../../docs/03-requirements-p0.md) 참고.
+## 구성
+
+- `app/` — Expo Router 화면과 전역 Query Provider
+- `src/lib/kto/` — 한국관광공사 OpenAPI 직접 호출 경계
+- `src/lib/storage/` — Expo SQLite 로컬 방문 기록 저장소
+
+사진 EXIF GPS와 원본 사진은 서버 또는 SQLite에 저장하지 않습니다. 관광공사 OpenAPI 응답도 영구 저장하지 않고 화면 표시에만 사용합니다.

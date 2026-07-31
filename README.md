@@ -10,7 +10,7 @@
 Tripic/
   apps/
     api/        # @tripic/api — NestJS 비위치성 운영 API (health/app-config/notices/legal/version)
-    mobile/     # @tripic/mobile — React Native (placeholder, 추후 Expo 스캐폴딩)
+    mobile/     # @tripic/mobile — Expo Router 기반 React Native 앱
   packages/
     shared/     # @tripic/shared — 공통 타입/상수 (앱·서버 공유 계약)
     tsconfig/   # @tripic/tsconfig — 공유 TypeScript 설정 (이름으로 extends)
@@ -49,6 +49,9 @@ pnpm lint          # 전체 린트
 pnpm format        # prettier
 pnpm api:dev       # NestJS 개발 서버 (watch)
 pnpm api:build     # NestJS 빌드
+pnpm mobile:start  # Expo 개발 서버
+pnpm mobile:ios    # iOS Simulator / 기기에서 열기
+pnpm mobile:android # Android Emulator / 기기에서 열기
 ```
 
 ## API (apps/api)
