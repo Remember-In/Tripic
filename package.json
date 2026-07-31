@@ -15,6 +15,9 @@
     "format": "prettier --write .",
     "api:dev": "pnpm --filter @tripic/api start:dev",
     "api:build": "pnpm --filter @tripic/api build",
+    "mobile:start": "pnpm --filter @tripic/mobile start",
+    "mobile:ios": "pnpm --filter @tripic/mobile ios",
+    "mobile:android": "pnpm --filter @tripic/mobile android",
     "prepare": "husky"
   },
   "lint-staged": {
