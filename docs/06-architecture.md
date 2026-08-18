@@ -78,15 +78,15 @@ P0에서는 pnpm workspace만 사용. Turborepo는 패키지/캐싱 필요 시�
 
 ### 10.3 Backend
 
-| 항목      | 선택                   |
-| --------- | ---------------------- |
-| Framework | NestJS                 |
-| Runtime   | Node.js LTS            |
-| Deploy    | Northflank             |
-| DB        | P0 없음                |
-| ORM       | P0 없음                |
-| API Docs  | Swagger/OpenAPI (선택) |
-| Container | Dockerfile 기반 배포   |
+| 항목      | 선택                                                     |
+| --------- | -------------------------------------------------------- |
+| Framework | NestJS                                                   |
+| Runtime   | Node.js LTS                                              |
+| Deploy    | Northflank                                               |
+| DB        | P0 없음 → P1: PostgreSQL (계정/인증 + 여행 기록 스키마)  |
+| ORM       | P0 없음 → P1: Prisma (여행 기록 API 노출은 사전 검토 후) |
+| API Docs  | Swagger/OpenAPI (선택)                                   |
+| Container | Dockerfile 기반 배포                                     |
 
 P0 서버 역할: Health Check, App Config, Notices, Terms/Privacy, Version Check, 비위치성 오류 로그(선택).
 P0 서버가 하지 않는 일: GPS 좌표 수신, EXIF 포함 사진 수신, 방문 장소 저장, 후보 매칭, OpenAPI 데이터 저장/캐싱 서빙, OpenAPI 프록시(P0 제외).
@@ -94,6 +94,10 @@ P0 서버가 하지 않는 일: GPS 좌표 수신, EXIF 포함 사진 수신, �
 ### 10.4 P1 이후 서버 확장 후보
 
 계정 로그인, 기기 간 동기화, 공유 링크, 서버 백업, 관리자 페이지, 서버 AI 해설 저장, 사용자별 통계 저장이 필요하면 DB/ORM 검토. 후보 스택: PostgreSQL + Prisma + NestJS 유지 + Northflank/Managed DB. 사용자별 장소 기록 서버 저장 시 위치정보지원센터 공식 사전 검토 후 진행.
+
+> **진행 현황**: 계정 로그인(카카오) 인증 스키마와 사용자 확정 여행 기록 스키마가 PostgreSQL + Prisma로
+> 반영되었다. 여행 기록은 스키마만 준비된 상태로, 동기화 API 노출은 위치정보지원센터 사전 검토 후에만 한다.
+> GPS·EXIF·KTO 원천 데이터는 여전히 저장하지 않는다. 상세 설계: [10-auth-db-design.md](./10-auth-db-design.md)
 
 ## 11. 모노레포 구조 (PRD 제안)
 

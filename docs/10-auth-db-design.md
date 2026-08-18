@@ -1,0 +1,258 @@
+# 카카오 소셜 로그인 인증/DB 설계 (P1 확장)
+
+| 항목      | 내용                                                                                      |
+| --------- | ----------------------------------------------------------------------------------------- |
+| 상태      | 설계 확정 (스키마/마이그레이션 반영 완료, API 구현은 후속 브랜치)                         |
+| 근거      | [docs/06-architecture.md](./06-architecture.md) §10.4 P1 확장 후보 (PostgreSQL + Prisma)  |
+| 디자인    | Figma 로그인 화면 — "카카오로 시작하기" 단일 버튼, AI 기록 생성 설정, 내 여행 기록        |
+| 플로우    | Figma Flow — 최초 실행 → 회원가입 여부 → (신규) 닉네임/권한 설정 → 카카오 로그인 → 홈     |
+| 핵심 제약 | GPS 좌표·EXIF 원본·KTO 원천 데이터는 서버 DB에 저장하지 않는다                            |
+| 법률 조건 | 계정별 방문 기록(관광지 확정값)의 서버 저장은 **위치정보지원센터 사전 검토 후 출시** (§9) |
+
+---
+
+## 1. 범위와 원칙
+
+- 소셜 로그인은 **카카오 단독**이다 (구글 미지원 — 디자인/플로우와 일치).
+- 서버 DB는 **계정/인증 + 사용자가 직접 확정한 여행 기록**을 저장한다.
+  GPS 좌표·EXIF 사진·KTO OpenAPI 원천 데이터는 어떤 테이블에도 저장하지 않는다.
+  - 저장하는 것: 기록 제목/테마/문체/해시태그, 날짜별 일기 본문(AI 생성 또는 직접 작성),
+    사용자가 확정한 관광지의 KTO `contentId` + 지역/분류 코드 + 방문일.
+  - 저장하지 않는 것: 사진(EXIF 포함 원본/사본), GPS 위도·경도, 관광지명/주소/소개/이미지
+    등 KTO 원천 데이터(화면 표시 시 OpenAPI 실시간 조회).
+- Prisma CLI(**v7**)는 글로벌 설치 없이 `apps/api` devDependency로 관리한다.
+  실행: `pnpm --filter @tripic/api db:migrate` (루트) 또는 `apps/api`에서 `pnpm prisma <cmd>`.
+  - Prisma 7 규칙에 따라 datasource url은 schema가 아닌
+    [apps/api/prisma.config.ts](../apps/api/prisma.config.ts)에서 관리한다 (`.env`는 node 내장
+    `process.loadEnvFile()`로 로드).
+  - client generator는 아직 없다 — auth API 구현 브랜치에서 `prisma-client` generator
+    (`moduleFormat = "cjs"`) + `@prisma/adapter-pg`로 추가한다 (§10).
+
+## 2. 인증 방식: 카카오 토큰 교환 (Token Exchange)
+
+모바일 앱이 [@react-native-kakao](https://rnkakao.mjstudio.net/) 네이티브 SDK(Expo config plugin, dev client 필요)로
+카카오톡 앱 전환 로그인을 수행하고, 발급받은 **카카오 access token을 서버에 전달**한다.
+서버는 카카오 API로 토큰을 검증한 뒤 자체 JWT를 발급한다. 서버가 카카오 OAuth
+redirect/callback을 처리하지 않으므로 client secret이 필요 없다.
+
+```mermaid
+sequenceDiagram
+    participant App as 모바일 앱 (RN + Kakao SDK)
+    participant API as NestJS API
+    participant Kakao as 카카오 API 서버
+
+    App->>Kakao: 카카오톡 앱 전환 로그인 (네이티브 SDK)
+    Kakao-->>App: 카카오 access token
+    App->>API: POST /auth/kakao { kakaoAccessToken }
+    API->>Kakao: GET /v1/user/access_token_info (app_id 대조, 필수)
+    API->>Kakao: GET /v2/user/me (Bearer 토큰)
+    Kakao-->>API: kakao user id
+    API->>API: SocialAccount(KAKAO, kakaoId) 조회<br/>없으면 User + SocialAccount 생성 (트랜잭션)
+    API-->>App: { accessToken(JWT), refreshToken, isNewUser, user }
+    Note over App: isNewUser=true면 닉네임 설정 화면으로
+```
+
+### 검증 규칙 (구현 브랜치 기준)
+
+| 단계                | 카카오 API                                     | 처리                                                                                                                                                                                                 |
+| ------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 토큰 유효성/소속    | `GET kapi.kakao.com/v1/user/access_token_info` | **필수 검증** — 응답 `app_id` ≠ `KAKAO_APP_ID` env → 401. 카카오 user id는 앱별 식별자이므로 타 카카오 앱에서 발급된 유효 토큰(토큰 치환)을 반드시 차단한다. `KAKAO_APP_ID` 미설정 시 서버 부팅 실패 |
+| 사용자 식별         | `GET kapi.kakao.com/v2/user/me`                | `id`를 `providerUserId`로 사용                                                                                                                                                                       |
+| 카카오 401          | —                                              | `401 Unauthorized` (invalid kakao token)                                                                                                                                                             |
+| 카카오 장애/timeout | —                                              | `502 Bad Gateway`, 타임아웃 5초                                                                                                                                                                      |
+
+## 3. 토큰 전략: JWT Access + Refresh Rotation
+
+| 토큰          | 형태                                           | 수명 | 저장                                    |
+| ------------- | ---------------------------------------------- | ---- | --------------------------------------- |
+| Access Token  | JWT (HS256, payload `{ sub: userId }`)         | 15분 | 서버 미저장 (서명 검증만)               |
+| Refresh Token | 불투명 랜덤 토큰 (`randomBytes(48)` base64url) | 30일 | **sha256 해시만** DB 저장 (원문 미저장) |
+
+**Rotation + 재사용 감지**: refresh 사용 시마다 새 토큰으로 교체(rotation)하고, 같은
+`familyId`로 체인을 관리한다. 이미 교체/폐기된 토큰이 다시 사용되면 탈취로 간주하고
+**해당 family 전체를 즉시 revoke**한다. 로그아웃 시에도 family 전체를 revoke한다.
+
+JWT를 refresh 토큰으로 쓰지 않는 이유: 즉시 폐기(서버 측 무효화)가 필요해서 어차피 DB
+조회가 필수이고, 불투명 토큰이 payload 유출 걱정 없이 더 단순하다.
+
+**회원탈퇴(soft delete)와 토큰 무효화**: `onDelete: Cascade`는 실제 행 삭제 시에만 동작하므로
+상태 전환만으로는 refresh token이 살아남는다. 따라서 구현 시 다음 규칙을 따른다.
+
+- 탈퇴 처리 트랜잭션에서 해당 유저의 **refresh token 전체를 revoke**한다 (`updateMany`).
+- `POST /auth/refresh`는 토큰 검증에 더해 **`user.status === ACTIVE`를 확인**하고 아니면 401.
+- access token은 서버 미저장이라 탈퇴 후 최대 15분(TTL) 유효할 수 있다 — 허용 가능한
+  트레이드오프로 두되, 민감 endpoint가 생기면 guard에서 status 조회를 추가한다.
+
+## 4. ERD
+
+```mermaid
+erDiagram
+    users ||--o{ social_accounts : "1:N"
+    users ||--o{ refresh_tokens : "1:N"
+
+    users {
+        text id PK "uuid(7)"
+        text nickname "nullable — 가입 직후 null"
+        UserStatus status "ACTIVE | DELETED"
+        timestamp createdAt
+        timestamp updatedAt
+        timestamp deletedAt "soft delete"
+    }
+
+    social_accounts {
+        text id PK "uuid(7)"
+        AuthProvider provider "KAKAO"
+        text providerUserId "UNIQUE(provider, providerUserId)"
+        text userId FK "onDelete: Cascade"
+        timestamp createdAt
+    }
+
+    refresh_tokens {
+        text id PK "uuid(7)"
+        text tokenHash "UNIQUE — sha256(token)"
+        text familyId "rotation family (인덱스)"
+        text userId FK "onDelete: Cascade"
+        timestamp expiresAt
+        timestamp revokedAt "nullable"
+        text replacedById "nullable — rotation 체인"
+        timestamp createdAt
+    }
+```
+
+### 여행 기록 ERD (Figma: 기록 생성 · AI 기록 생성 설정 · 내 여행 기록)
+
+```mermaid
+erDiagram
+    users ||--o{ records : "1:N"
+    records ||--o{ record_entries : "1:N"
+    records ||--o{ record_places : "1:N"
+
+    records {
+        text id PK "uuid(7)"
+        text userId FK "onDelete: Cascade"
+        text title "사용자 지정 (예: 경주 여행)"
+        RecordTheme theme "nullable — 자연/역사/음식/지역완주"
+        DiaryStyle style "nullable — 다큐/에세이/대화체"
+        text_arr hashtags "배열"
+        timestamp createdAt "INDEX(userId, createdAt DESC)"
+        timestamp updatedAt
+        timestamp deletedAt "soft delete"
+    }
+
+    record_entries {
+        text id PK "uuid(7)"
+        text recordId FK "onDelete: Cascade"
+        date date "UNIQUE(recordId, date)"
+        text content "일기 본문"
+        EntrySource source "USER | AI"
+        timestamp createdAt
+        timestamp updatedAt
+    }
+
+    record_places {
+        text id PK "uuid(7)"
+        text recordId FK "onDelete: Cascade"
+        text ktoContentId "KTO contentId만 저장"
+        text areaCode "INDEX(areaCode, sigunguCode)"
+        text sigunguCode "nullable"
+        text categoryCode "nullable"
+        timestamp visitedAt
+        timestamp createdAt
+    }
+```
+
+스키마 원본: [apps/api/prisma/schema.prisma](../apps/api/prisma/schema.prisma)
+마이그레이션: `apps/api/prisma/migrations/20260815085742_init_auth_schema/`,
+`apps/api/prisma/migrations/20260816121206_add_travel_records/`
+
+## 5. 스키마 결정 근거
+
+| 결정                                                     | 근거                                                                                                             |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `SocialAccount` 별도 테이블 (User에 kakaoId 직저장 대신) | 카카오 단독이지만 `provider` enum + `@@unique([provider, providerUserId])`로 향후 provider 추가 시 스키마 무변경 |
+| ID = `uuid(7)`                                           | UUIDv7은 시간 정렬형이라 B-tree 인덱스 친화적, Prisma 네이티브 지원                                              |
+| `nickname` nullable                                      | 온보딩 플로우상 가입 직후엔 없음 → 닉네임 설정 단계(`PATCH /users/me`)에서 채움                                  |
+| refresh 토큰 해시 저장                                   | DB 유출 시에도 토큰 원문 노출 없음                                                                               |
+| `familyId` 인덱스                                        | 재사용 감지 시 family 전체 revoke(`updateMany`) 성능                                                             |
+| soft delete (`status` + `deletedAt`)                     | 회원탈퇴 유예/복구 정책을 P2에서 결정할 여지. 파기 배치는 추후                                                   |
+| role/권한 컬럼 없음                                      | Flow의 "권한 설정"은 기기 권한(사진 접근) 온보딩이지 서버 롤이 아님                                              |
+| `theme`/`style`은 User가 아닌 Record 소속                | "AI 기록 생성 설정" 화면은 기록 생성 플로우의 일부 — 기록마다 다르게 선택 (계정 기본값 필요 시 추후 컬럼 추가)   |
+| `RecordEntry` 날짜별 분리 + `UNIQUE(recordId, date)`     | Flow 노트 "날짜별로 묶어서 일기 작성" — 하루 1편, AI/직접 작성 구분(`source`)                                    |
+| `RecordPlace`에 코드값만 저장                            | contentId + area/sigungu/category 코드는 KTO 원천 데이터가 아닌 참조 키 — 지역별 조회·시군구 진행률(157) 집계용  |
+| 사진 미저장                                              | 사진은 앱 로컬 자산 참조로만 존재 — 서버는 기록 텍스트와 장소 참조만 보관                                        |
+| `hashtags`는 배열                                        | 태그 검색/추천 고도화 전까지 N:M 테이블은 과설계                                                                 |
+
+## 6. API 명세 초안 (후속 브랜치 `feat/auth-kakao-api`에서 구현)
+
+| Method | Path            | 인증   | 요청                         | 응답                                                                                  |
+| ------ | --------------- | ------ | ---------------------------- | ------------------------------------------------------------------------------------- |
+| POST   | `/auth/kakao`   | 공개   | `{ kakaoAccessToken }`       | `201 { accessToken, refreshToken, expiresIn, isNewUser, user: { id, nickname } }`     |
+| POST   | `/auth/refresh` | 공개   | `{ refreshToken }`           | `200 { accessToken, refreshToken, expiresIn }` / 재사용 감지 시 `401` + family revoke |
+| POST   | `/auth/logout`  | Bearer | `{ refreshToken }`           | `204` (family 전체 revoke)                                                            |
+| GET    | `/users/me`     | Bearer | —                            | `200 { id, nickname, createdAt }`                                                     |
+| PATCH  | `/users/me`     | Bearer | `{ nickname }` (trim 2–20자) | `200 { id, nickname }`                                                                |
+
+- 전역 guard(default-deny) + `@Public()` 데코레이터 방식. 기존 운영 API
+  (health/app-config/notices/legal/version)는 `@Public()` 유지.
+- 요청 검증은 zod (`packages/shared/src/schemas/`에 스키마 배치 — 모바일과 공유).
+
+## 7. 환경 변수
+
+| 변수                   | 용도                                     | 이번 브랜치 |
+| ---------------------- | ---------------------------------------- | ----------- |
+| `DATABASE_URL`         | PostgreSQL 접속 문자열                   | 사용        |
+| `JWT_ACCESS_SECRET`    | JWT 서명 키 (32자 이상)                  | 예고만      |
+| `JWT_ACCESS_TTL_SEC`   | access token 수명 (기본 900)             | 예고만      |
+| `JWT_REFRESH_TTL_DAYS` | refresh token 수명 (기본 30)             | 예고만      |
+| `KAKAO_APP_ID`         | access_token_info의 app_id 대조용 (필수) | 예고만      |
+
+`KAKAO_ADMIN_KEY`는 현재 불필요 — 회원탈퇴 시 서버 측 unlink(admin API)를 도입할 때만 필요.
+템플릿: [apps/api/.env.example](../apps/api/.env.example)
+
+## 8. 로컬 개발 / 마이그레이션 워크플로
+
+```bash
+# 1. DB 기동 (레포 루트, 호스트 포트 48291 — 로컬 5432 점유와 충돌 회피)
+docker compose up -d db
+
+# 2. env 준비
+cp apps/api/.env.example apps/api/.env
+
+# 3. 마이그레이션 (스키마 변경 시)
+# 주의: pnpm은 `--`를 그대로 전달하고 prisma는 `--` 이후 플래그를 무시하므로 `--` 없이 쓴다
+pnpm --filter @tripic/api db:migrate --name <change_name>
+
+# 4. 상태 확인 (apps/api 디렉터리에서)
+pnpm prisma migrate status
+```
+
+프로덕션(Northflank): 런타임 이미지에 prisma CLI를 넣지 않는다. 배포 직전 파이프라인에서
+`prisma migrate deploy`를 실행한다 (초기에는 수동 실행 허용).
+
+## 9. 위치정보 법률 검토 (기록 서버 저장의 출시 조건)
+
+계정별 방문 기록의 서버 저장은 PRD([08-privacy-risk.md](./08-privacy-risk.md))가 명시한 대로
+**위치정보지원센터 공식 사전 검토 후 출시**한다. 검토 요청 시 논거:
+
+- 기기에서 수집된 **GPS 좌표(EXIF 포함)는 서버로 전송·저장하지 않는다** — 기존 원칙 유지.
+- 서버에 저장되는 것은 사용자가 화면에서 **직접 선택·확정한 관광지의 KTO contentId와 방문일**뿐이다.
+  이는 통신설비로 자동 수집된 위치정보가 아니라 SNS 체크인과 유사한 자기 선언 콘텐츠 성격이다.
+- 좌표 정밀도가 아닌 관광지/지역 코드 단위이며, 실시간 위치가 아닌 과거 방문 기록이다.
+
+검토 결과가 나오기 전까지: 스키마/마이그레이션은 준비하되, 기록 동기화 API의 **프로덕션 노출은 보류**한다.
+검토에서 제약이 확인되면 records/record_entries/record_places 테이블 도입을 재설계한다.
+
+## 10. 후속 브랜치 체크리스트 (`feat/auth-kakao-api`)
+
+- [ ] Prisma 7 `prisma-client` generator 추가 (output 소스 트리, `moduleFormat = "cjs"` — apps/api는 CJS 출력)
+      \+ `@prisma/client` 런타임 + `@prisma/adapter-pg` 의존성, CI lint/test job에 generate step
+- [ ] ConfigModule + zod env 검증, `main.ts` `enableShutdownHooks()`
+- [ ] PrismaModule/PrismaService — `new PrismaClient({ adapter: new PrismaPg({ connectionString }) })` (driver adapter 방식)
+- [ ] AuthModule (KakaoService fetch 검증, JWT guard, `@Public()`, rotation 로직)
+- [ ] `KAKAO_APP_ID` env 필수화 — 미설정 시 부팅 실패, app_id 불일치 시 401 (타 앱 토큰 차단)
+- [ ] 탈퇴 시 refresh token 전체 revoke + refresh 시 `user.status === ACTIVE` 확인 (§3)
+- [ ] UsersModule (`GET/PATCH /users/me`)
+- [ ] 단위 테스트 + e2e (**Testcontainers** PostgreSQL + PactumJS, KakaoService stub)
+- [ ] Dockerfile: build 단계에서 `prisma generate` 후 `nest build` — Prisma 7은 Rust 엔진
+      바이너리가 없고 generated client가 소스로 컴파일되므로, 6에서 필요했던 `pnpm deploy`
+      산출물 재생성 핵과 alpine musl `binaryTargets` 이슈가 사라짐. `docker run` 스모크로 검증만.

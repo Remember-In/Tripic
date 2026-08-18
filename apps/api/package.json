@@ -16,7 +16,10 @@
     "lint": "eslint src test",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "vitest run --config vitest.config.e2e.ts"
+    "test:e2e": "vitest run --config vitest.config.e2e.ts",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:studio": "prisma studio"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.28",
@@ -33,6 +36,7 @@
     "@tripic/tsconfig": "workspace:*",
     "@types/node": "^24.13.3",
     "pactum": "^3.9.1",
+    "prisma": "^7.9.1",
     "unplugin-swc": "^1.5.9",
     "vitest": "^3.2.7"
   }

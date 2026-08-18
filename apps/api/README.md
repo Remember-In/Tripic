@@ -7,6 +7,9 @@ Tripic의 **비위치성 운영 API** 서버 (NestJS). 공지·약관·앱 설�
 > - 사용자 **GPS 좌표·EXIF 원본 사진·방문 기록을 수신/저장하지 않는다.**
 > - 관광공사 OpenAPI 호출/데이터 저장을 하지 않는다 (앱이 직접 호출).
 > - **P0에서는 DB/ORM을 사용하지 않는다.**
+>   P1 확장으로 **계정/인증(카카오 로그인) + 사용자 확정 여행 기록** PostgreSQL + Prisma 스키마를 도입했다
+>   (여행 기록은 스키마만 준비 — 동기화 API 노출은 위치정보지원센터 사전 검토 후) —
+>   [docs/10-auth-db-design.md](../../docs/10-auth-db-design.md) 참고. GPS·위치·KTO 원천 데이터는 여전히 저장하지 않는다.
 
 ## 실행
 
@@ -28,6 +31,20 @@ pnpm --filter @tripic/api start:prod  # 빌드 산출물 실행 (node dist/src/m
 ```bash
 curl http://localhost:3000/health     # → {"status":"ok"}
 ```
+
+## 로컬 DB (PostgreSQL + Prisma)
+
+계정/인증 + 여행 기록 스키마는 `prisma/schema.prisma`에 있다. 로컬 DB는 레포 루트의 docker-compose로 기동한다:
+
+```bash
+docker compose up -d db                                # postgres 18 (호스트 포트 48291)
+cp apps/api/.env.example apps/api/.env                 # DATABASE_URL 준비
+pnpm --filter @tripic/api db:migrate                   # 마이그레이션 적용 (스키마 변경 시 --name 지정)
+pnpm prisma migrate status                             # 적용 상태 확인 (apps/api에서)
+```
+
+Prisma 7 규칙에 따라 datasource url은 `prisma.config.ts`에서 관리한다 (schema.prisma에는 없음).
+설계 배경과 ERD는 [docs/10-auth-db-design.md](../../docs/10-auth-db-design.md) 참고.
 
 ## 엔드포인트 (PRD 14.2)
 

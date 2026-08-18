@@ -16,6 +16,10 @@
 
 GPS 좌표 서버 미전송, EXIF 포함 원본 사진 미업로드, 방문 장소 기록 서버 미저장. 비위치성 앱 설정·공지·약관만 서버 제공.
 
+> **P1 진행 현황**: 계정/인증 + 사용자 확정 여행 기록(제목/일기/contentId·지역코드)의 서버 스키마가
+> 준비되었다 ([10-auth-db-design.md](./10-auth-db-design.md)). 단, 기록 동기화 API의 프로덕션 노출은
+> **위치정보지원센터 사전 검토 후**에만 한다. GPS 좌표·EXIF·KTO 원천 데이터 미저장 원칙은 그대로다.
+
 ## 13. 최소 로컬 데이터 모델
 
 타입 정의는 [`packages/shared/src/types`](../packages/shared/src/types/index.ts)에 구현되어 있다.
