@@ -10,6 +10,8 @@ on:
       - "pnpm-workspace.yaml"
       - "package.json"
       - ".npmrc"
+      - ".dockerignore"
+      - "docker-compose.yml"
       - ".github/workflows/server-ci.yml"
   pull_request:
     paths:
@@ -19,6 +21,8 @@ on:
       - "pnpm-workspace.yaml"
       - "package.json"
       - ".npmrc"
+      - ".dockerignore"
+      - "docker-compose.yml"
       - ".github/workflows/server-ci.yml"
 
 permissions:
@@ -44,6 +48,14 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Build workspace deps & generate Prisma client
+        # generate 는 DB 미접속이지만 prisma.config.ts 가 DATABASE_URL 존재를 요구 — 빌드용 더미 사용
+        env:
+          DATABASE_URL: "postgresql://build:build@127.0.0.1:1/build"
+        run: |
+          pnpm --filter @tripic/shared build
+          pnpm --filter @tripic/api db:generate
 
       - name: Run ESLint
         run: pnpm --filter @tripic/api lint
@@ -71,6 +83,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build workspace deps & generate Prisma client
+        # generate 는 DB 미접속이지만 prisma.config.ts 가 DATABASE_URL 존재를 요구 — 빌드용 더미 사용
+        env:
+          DATABASE_URL: "postgresql://build:build@127.0.0.1:1/build"
+        run: |
+          pnpm --filter @tripic/shared build
+          pnpm --filter @tripic/api db:generate
+
       - name: Run unit tests
         run: pnpm --filter @tripic/api test
 
@@ -94,6 +114,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build workspace deps & generate Prisma client
+        # generate 는 DB 미접속이지만 prisma.config.ts 가 DATABASE_URL 존재를 요구 — 빌드용 더미 사용
+        env:
+          DATABASE_URL: "postgresql://build:build@127.0.0.1:1/build"
+        run: |
+          pnpm --filter @tripic/shared build
+          pnpm --filter @tripic/api db:generate
+
+      # e2e 는 Testcontainers 로 일회성 Postgres 를 띄운다 (ubuntu-latest 에 Docker 내장)
       - name: Run e2e tests
         run: pnpm --filter @tripic/api test:e2e
 

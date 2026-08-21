@@ -9,3 +9,6 @@
 .idea
 **/*.log
 deploy
+**/.env
+**/.env.*
+**/src/generated

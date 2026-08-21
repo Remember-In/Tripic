@@ -242,17 +242,21 @@ pnpm prisma migrate status
 검토 결과가 나오기 전까지: 스키마/마이그레이션은 준비하되, 기록 동기화 API의 **프로덕션 노출은 보류**한다.
 검토에서 제약이 확인되면 records/record_entries/record_places 테이블 도입을 재설계한다.
 
-## 10. 후속 브랜치 체크리스트 (`feat/auth-kakao-api`)
+## 10. 후속 브랜치 체크리스트 (`feat/auth-kakao-api`) — 완료
 
-- [ ] Prisma 7 `prisma-client` generator 추가 (output 소스 트리, `moduleFormat = "cjs"` — apps/api는 CJS 출력)
-      \+ `@prisma/client` 런타임 + `@prisma/adapter-pg` 의존성, CI lint/test job에 generate step
-- [ ] ConfigModule + zod env 검증, `main.ts` `enableShutdownHooks()`
-- [ ] PrismaModule/PrismaService — `new PrismaClient({ adapter: new PrismaPg({ connectionString }) })` (driver adapter 방식)
-- [ ] AuthModule (KakaoService fetch 검증, JWT guard, `@Public()`, rotation 로직)
-- [ ] `KAKAO_APP_ID` env 필수화 — 미설정 시 부팅 실패, app_id 불일치 시 401 (타 앱 토큰 차단)
-- [ ] 탈퇴 시 refresh token 전체 revoke + refresh 시 `user.status === ACTIVE` 확인 (§3)
-- [ ] UsersModule (`GET/PATCH /users/me`)
-- [ ] 단위 테스트 + e2e (**Testcontainers** PostgreSQL + PactumJS, KakaoService stub)
-- [ ] Dockerfile: build 단계에서 `prisma generate` 후 `nest build` — Prisma 7은 Rust 엔진
-      바이너리가 없고 generated client가 소스로 컴파일되므로, 6에서 필요했던 `pnpm deploy`
-      산출물 재생성 핵과 alpine musl `binaryTargets` 이슈가 사라짐. `docker run` 스모크로 검증만.
+구현은 [apps/api/CLAUDE.md](../apps/api/CLAUDE.md)의 원칙(TDD·경량 헥사고날 ports & adapters·SOLID)을 따랐다.
+
+- [x] Prisma 7 `prisma-client` generator 추가 (output `src/generated`, `moduleFormat = "cjs"`, 미커밋)
+      \+ `@prisma/client` 런타임 + `@prisma/adapter-pg` 의존성, CI lint/test/e2e job에 generate step
+- [x] ConfigModule + zod env 검증(`src/config/env.ts`), `main.ts` `enableShutdownHooks()`
+- [x] PrismaModule/PrismaService — `new PrismaClient({ adapter: new PrismaPg({ connectionString }) })`
+- [x] AuthModule — `ports/`(KakaoVerifier·AuthAccounts·RefreshTokens) + `adapters/`(kakao-api fetch,
+      prisma-\*), 전역 JwtAuthGuard + `@Public()`, rotation은 어댑터 트랜잭션으로 원자성 보장
+- [x] `KAKAO_APP_ID` env 필수화 — 미설정 시 부팅 실패, app_id 불일치 시 401 (타 앱 토큰 차단)
+- [x] 탈퇴 계정 검사 — login/refresh/me 에서 `status === ACTIVE` 확인 (§3; 탈퇴 API 자체는 미구현)
+- [x] UsersModule (`GET/PATCH /users/me`, 닉네임 온보딩)
+- [x] 단위 테스트(포트 in-memory fake) + e2e(**Testcontainers** Postgres + PactumJS, 카카오 port stub)
+- [x] Dockerfile: shared build → `prisma generate` → `nest build` — Prisma 7은 엔진 바이너리가 없어
+      6에서 우려했던 `pnpm deploy` 재생성 핵과 alpine musl `binaryTargets` 이슈가 사라짐
+
+남은 것: 회원탈퇴 API(탈퇴 트랜잭션에서 refresh token 전체 revoke — §3 규칙 구현처), 여행 기록 API(위치정보지원센터 검토 후).

@@ -19,5 +19,8 @@
   },
   "devDependencies": {
     "@tripic/tsconfig": "workspace:*"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
   }
 }

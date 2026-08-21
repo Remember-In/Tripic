@@ -40,3 +40,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+
+# Prisma 생성 클라이언트 (로컬/CI/Docker에서 generate)
+apps/api/src/generated/
