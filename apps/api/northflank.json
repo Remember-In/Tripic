@@ -1,4 +1,5 @@
 {
+  "$schema": "https://api.northflank.com/v1/schemas/template",
   "apiVersion": "v1.2",
   "arguments": {
     "projectId": "tripic",
@@ -31,8 +32,16 @@
               "docker": {
                 "configType": "default"
               }
-            }
-          }
+            },
+            "buildConfiguration": {
+              "pathIgnoreRules": [],
+              "isAllowList": false,
+              "ciIgnoreFlagsEnabled": false
+            },
+            "runtimeEnvironment": {},
+            "buildArguments": {}
+          },
+          "updateMode": "put"
         },
         {
           "kind": "JobRun",
@@ -81,5 +90,16 @@
         }
       ]
     }
+  },
+  "options": {
+    "autorun": false,
+    "concurrencyPolicy": "allow"
+  },
+  "gitops": {
+    "repoUrl": "https://github.com/Remember-In/Tripic",
+    "vcsService": "github",
+    "accountLogin": "Remember-In",
+    "branch": "main",
+    "filePath": "/apps/api/northflank.json"
   }
 }
