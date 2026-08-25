@@ -16,9 +16,13 @@
 | [07-data-and-api.md](./07-data-and-api.md)             | 데이터 저장 정책 · 로컬 데이터 모델 · API 역할      | 12~14       |
 | [08-privacy-risk.md](./08-privacy-risk.md)             | 성능/UX · 개인정보/위치정보 정책 · 리스크           | 15~17       |
 | [09-release-principles.md](./09-release-principles.md) | 릴리스 계획 · 완료 기준 · 설계 원칙 · 기술 의사결정 | 18~21       |
+| [10-auth-db-design.md](./10-auth-db-design.md)         | 카카오 소셜 로그인 인증/DB 설계 (P1 확장)           | —           |
 
 ## 핵심 제약 (전 문서 공통)
 
 - 한국관광공사 OpenAPI는 **실시간 호출**하며, 원천 데이터를 로컬/서버 DB에 저장·캐싱 서빙하지 않는다.
 - 사용자 **GPS 좌표는 백엔드 서버로 전송하지 않는다** (앱 내부에서만 사용).
 - **P0에서는 서버 DB/ORM을 사용하지 않는다.** NestJS 서버는 비위치성 운영 API에 한정한다.
+  - P1 확장([06-architecture.md](./06-architecture.md) §10.4 사전 승인)으로 **계정/인증 + 사용자 확정 여행 기록** PostgreSQL + Prisma
+    스키마를 도입했다 ([10-auth-db-design.md](./10-auth-db-design.md)). GPS·EXIF·KTO 원천 데이터는 여전히 저장하지 않는다.
+    여행 기록은 **스키마만 준비된 상태**이며, 기록 동기화 API의 프로덕션 노출은 위치정보지원센터 사전 검토 후에만 한다.
