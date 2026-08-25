@@ -17,6 +17,8 @@
 | [08-privacy-risk.md](./08-privacy-risk.md)             | 성능/UX · 개인정보/위치정보 정책 · 리스크           | 15~17       |
 | [09-release-principles.md](./09-release-principles.md) | 릴리스 계획 · 완료 기준 · 설계 원칙 · 기술 의사결정 | 18~21       |
 | [10-auth-db-design.md](./10-auth-db-design.md)         | 카카오 소셜 로그인 인증/DB 설계 (P1 확장)           | —           |
+| [11-records-api-design.md](./11-records-api-design.md) | 여행 기록 콘텐츠 API 설계 (P1)                      | —           |
+| [12-location-law.md](./12-location-law.md)             | 위치정보법 조사 및 Tripic 적용 판단                 | —           |
 
 ## 핵심 제약 (전 문서 공통)
 
@@ -25,4 +27,5 @@
 - **P0에서는 서버 DB/ORM을 사용하지 않는다.** NestJS 서버는 비위치성 운영 API에 한정한다.
   - P1 확장([06-architecture.md](./06-architecture.md) §10.4 사전 승인)으로 **계정/인증 + 사용자 확정 여행 기록** PostgreSQL + Prisma
     스키마를 도입했다 ([10-auth-db-design.md](./10-auth-db-design.md)). GPS·EXIF·KTO 원천 데이터는 여전히 저장하지 않는다.
-    여행 기록은 **스키마만 준비된 상태**이며, 기록 동기화 API의 프로덕션 노출은 위치정보지원센터 사전 검토 후에만 한다.
+    여행 기록 중 **콘텐츠(제목·일기·해시태그)는 서버 저장/API 노출 가능**([11-records-api-design.md](./11-records-api-design.md))하고,
+    **방문 관광지(record_places) 부분만** 위치정보지원센터 사전 검토 후 노출한다 (법적 근거 조사: [12-location-law.md](./12-location-law.md)).

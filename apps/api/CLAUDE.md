@@ -42,4 +42,5 @@ NestJS 모듈 = bounded context. 모듈 내부 구조:
 ## 금지 사항 (PRD 제약)
 
 - GPS 좌표·EXIF 원본·KTO 원천 데이터를 수신/저장하는 코드를 만들지 않는다.
-- 여행 기록 동기화 API는 위치정보지원센터 사전 검토 전까지 노출하지 않는다.
+- 방문 관광지(record_places) API는 위치정보지원센터 사전 검토 전까지 노출하지 않는다.
+  기록 콘텐츠(제목·일기·해시태그) API는 검토 대상이 아니다 — docs/11-records-api-design.md 참고.
