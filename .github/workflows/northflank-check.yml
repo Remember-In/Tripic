@@ -1,34 +1,27 @@
-name: Northflank Check
+name: Northflank Token Check
 
-# Northflank API 토큰/경로 진단용. 태그를 밀지 않고 손으로 돌린다.
-# 릴리스 파이프라인(server-publish.yml)이 401 로 막힐 때 어느 경로·어느 권한이 문제인지 좁힌다.
+# NORTHFLANK_API_TOKEN 이 아직 살아 있는지 확인한다. 릴리스가 401 로 막히면 여기부터 본다.
 #
-# 응답 본문은 error.message 만 출력한다 — 성공 응답에는 프로젝트/팀 이름이 들어 있어 로그에 남기지 않는다.
+# 배경: 토큰은 만료되거나 폐기되면 형식이 멀쩡해도 "존재하지 않는 토큰"과 똑같은 401 을 준다.
+# 본문이 "Unauthorized" 한 줄뿐이라 응답만 봐서는 구분이 안 되므로, 만료 시각을 직접 디코드한다.
 
 on:
   workflow_dispatch:
-    inputs:
-      teamId:
-        description: "팀 ID 또는 슬러그 (비우면 계정 스코프만 확인)"
-        required: false
-        default: ""
 
 permissions:
   contents: read
 
 jobs:
   check:
-    name: Probe Northflank API
+    name: Check Northflank API token
     runs-on: ubuntu-latest
     timeout-minutes: 5
     environment: production
     steps:
-      - name: Probe
+      - name: Check
         env:
           NF_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
           NF_TEMPLATE: ${{ vars.NORTHFLANK_TEMPLATE_ID }}
-          # 입력이 비어 있으면 릴리스 워크플로와 같은 variable 을 쓴다.
-          NF_TEAM: ${{ inputs.teamId || vars.NORTHFLANK_TEAM_ID }}
         run: |
           set -uo pipefail
           API=https://api.northflank.com
@@ -38,100 +31,46 @@ jobs:
             exit 1
           fi
 
-          # 토큰 값 자체는 찍지 않고 형태만 본다. 뒤에 개행/공백이 붙어 있으면 헤더가 깨져 401 이 난다.
-          LEN=${#NF_TOKEN}
-          TRIMMED="$(printf '%s' "${NF_TOKEN}" | tr -d '[:space:]')"
-          echo "token: len=${LEN} len_without_whitespace=${#TRIMMED} dots=$(printf '%s' "${NF_TOKEN}" | tr -cd '.' | wc -c | tr -d ' ')"
-          if [ "${LEN}" -ne "${#TRIMMED}" ]; then
-            echo "::warning::Token contains whitespace — a trailing newline in the secret breaks the Authorization header."
-          fi
-          echo "template id: ${NF_TEMPLATE:-<unset>}"
-
-          # Northflank 토큰은 JWT 다. 서명은 건드리지 않고 payload 의 만료·소속만 찍는다.
-          # (기본 발급이 24시간짜리라, 오래된 값이 secret 에 남아 있으면 모든 경로가 401 이 된다)
+          # 토큰 값은 찍지 않는다. Northflank 토큰은 JWT 라 payload 에서 만료·소속만 읽는다.
           printf '%s' "${NF_TOKEN}" | node -e '
             let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
               const parts = s.trim().split(".");
               if (parts.length !== 3) return console.log("token: not a JWT — skipping expiry check");
-              // HS256 서명은 base64url 로 항상 43자다. 다르면 복사 과정에서 잘리거나 덧붙은 것이고,
-              // payload 는 멀쩡히 디코드되면서 서명 검증만 실패해 "모르는 토큰"처럼 401 이 난다.
-              console.log("part lengths : header=" + parts[0].length + " payload=" + parts[1].length + " signature=" + parts[2].length);
-              if (parts[2].length !== 43) {
-                console.log("::error::Signature is " + parts[2].length + " chars, expected 43 for HS256 — the stored token is corrupted. Re-copy it with the copy button and update the secret.");
-              }
               try {
                 const p = JSON.parse(Buffer.from(parts[1], "base64url").toString());
                 const now = Math.floor(Date.now() / 1000);
-                console.log("token issued : " + (p.iat ? new Date(p.iat * 1000).toISOString() : "?"));
-                console.log("token expires: " + (p.exp ? new Date(p.exp * 1000).toISOString() : "?"));
-                console.log("token scope  : " + p.entityType + " / role " + p.roleInternalId);
-                console.log("token name   : " + p.tokenInternalId);
+                console.log("issued  : " + (p.iat ? new Date(p.iat * 1000).toISOString() : "?"));
+                console.log("expires : " + (p.exp ? new Date(p.exp * 1000).toISOString() : "?"));
+                console.log("scope   : " + p.entityType + " / role " + p.roleInternalId + " / name " + p.tokenInternalId);
                 if (p.exp && p.exp < now) {
-                  console.log("::error::TOKEN EXPIRED " + Math.round((now - p.exp) / 3600) + "h ago — regenerate it and update the NORTHFLANK_API_TOKEN secret.");
+                  console.log("::error::Token expired " + Math.round((now - p.exp) / 3600) + "h ago — create a new one in Team Settings > API > Tokens and update the secret.");
                 } else if (p.exp) {
-                  console.log("token valid for another " + Math.round((p.exp - now) / 3600) + "h");
+                  console.log("valid for another " + Math.round((p.exp - now) / 24 / 3600) + " days");
                 }
               } catch { console.log("token: payload decode failed"); }
             });'
           echo
 
+          # 만료 전인데도 401 이면 그 토큰은 폐기된 것이다 — 재발급 외에 방법이 없다.
+          TOKEN="$(printf '%s' "${NF_TOKEN}" | tr -d '[:space:]')"
           probe() {
-            local label="$1" url="$2"
-            local body code msg
-            body="$(curl -sS -o /tmp/nf-body.json -w '%{http_code}' \
-              -H "Authorization: Bearer ${TRIMMED}" "${url}" 2>/dev/null)" || body="curl-error"
-            code="${body}"
-            msg="$(jq -r '.error.message // empty' /tmp/nf-body.json 2>/dev/null)"
-            printf '%-34s %-4s %s\n' "${label}" "${code}" "${msg}"
+            local label="$1" url="$2" code
+            code="$(curl -sS -o /tmp/nf.json -w '%{http_code}' -H "Authorization: Bearer ${TOKEN}" "${url}")" \
+              || code="curl-error"
+            printf '%-28s %-4s %s\n' "${label}" "${code}" "$(jq -r '.error.message // empty' /tmp/nf.json 2>/dev/null)"
+            [ "${code}" = "200" ]
           }
 
-          # 토큰 값은 맞는데 전달 형식이 틀렸을 가능성을 배제한다.
-          # nf- 는 Northflank 가 붙인 식별 접두사라 JWT 본문이 아니다(디코드할 때 떼야 헤더가 나온다).
-          # 서버가 접두사 포함/제외 중 어느 쪽을 기대하는지 문서에 없으므로 직접 눌러본다.
-          echo "=== header variants (GET /v1/projects) ==="
-          variant() {
-            local label="$1"; shift
-            local code
-            code="$(curl -sS -o /tmp/nf-v.json -w '%{http_code}' "$@" "${API}/v1/projects" 2>/dev/null)" || code="curl-error"
-            printf '%-28s %-4s %s\n' "${label}" "${code}" "$(jq -r '.error.message // empty' /tmp/nf-v.json 2>/dev/null)"
-          }
-          variant "Bearer <token>"        -H "Authorization: Bearer ${TRIMMED}"
-          variant "Bearer <no nf- prefix>" -H "Authorization: Bearer ${TRIMMED#nf-}"
-          variant "raw (no Bearer)"       -H "Authorization: ${TRIMMED}"
-          variant "x-api-key"             -H "x-api-key: ${TRIMMED}"
-          echo
-
-          # 진짜 토큰과 명백한 가짜 토큰의 응답을 나란히 비교한다.
-          # 완전히 같으면 서버가 우리 토큰을 "모르는" 것(폐기/미등록)이고,
-          # 다르면 토큰은 인식하되 권한에서 막는 것이다 — 물어볼 곳이 달라진다.
-          dump() {
-            local label="$1" tok="$2"
-            echo "--- ${label} ---"
-            curl -sS -D - -o /tmp/nf-h.json -H "Authorization: Bearer ${tok}" "${API}/v1/projects" 2>/dev/null \
-              | tr -d '\r' | grep -vaiE '^(date|content-length|x-envoy|alt-svc|strict-transport):' | grep -a ':\|HTTP' || true
-            echo "body: $(head -c 200 /tmp/nf-h.json)"
-          }
-          echo "=== real vs bogus token (GET /v1/projects) ==="
-          dump "real token" "${TRIMMED}"
-          dump "bogus token" "nf-not-a-real-token"
-          echo
-
-          echo "=== account-scoped ==="
-          probe "GET /v1/projects"          "${API}/v1/projects"
-          probe "GET /v1/templates"         "${API}/v1/templates"
-          [ -n "${NF_TEMPLATE}" ] && probe "GET /v1/templates/{id}" "${API}/v1/templates/${NF_TEMPLATE}"
-
-          if [ -n "${NF_TEAM}" ]; then
-            echo
-            echo "=== team-scoped (${NF_TEAM}) ==="
-            probe "GET /teams/{t}/projects"  "${API}/v1/teams/${NF_TEAM}/projects"
-            probe "GET /teams/{t}/templates" "${API}/v1/teams/${NF_TEAM}/templates"
-            [ -n "${NF_TEMPLATE}" ] && probe "GET /teams/{t}/templates/{id}" \
-              "${API}/v1/teams/${NF_TEAM}/templates/${NF_TEMPLATE}"
+          OK=0
+          probe "GET /v1/projects" "${API}/v1/projects" || OK=1
+          if [ -n "${NF_TEMPLATE}" ]; then
+            probe "GET /v1/templates/{id}" "${API}/v1/templates/${NF_TEMPLATE}" || OK=1
           else
-            echo
-            echo "(teamId 입력이 비어 있어 팀 스코프는 건너뜀)"
+            echo "NORTHFLANK_TEMPLATE_ID is not set — skipping the template check."
           fi
 
-          echo
-          echo "200 이 나오는 경로가 릴리스 워크플로가 써야 할 경로다."
+          if [ "${OK}" -ne 0 ]; then
+            echo "::error::Token is not accepted. If it is not expired above, it was revoked — issue a new one and replace the secret."
+            exit 1
+          fi
+          echo "Token works."

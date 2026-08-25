@@ -43,8 +43,10 @@ jobs:
       id-token: write # OIDC for SLSA provenance
       attestations: write
     outputs:
-      # 태그가 아닌 digest 를 넘긴다. 태그는 덮어쓸 수 있지만 digest 는 불변이라
-      # "마이그레이션한 SQL" 과 "배포되는 앱" 이 같은 커밋임을 보장한다.
+      # 버전 태그(0.0.5)로 넘긴다 — Northflank UI 에서 어느 릴리스가 떠 있는지 바로 보인다.
+      # 대신 태그는 덮어쓸 수 있으므로, 같은 버전을 다시 태그하지 않는 것이 전제다
+      # (Verify tag matches package version 스텝이 package.json 상향을 강제한다).
+      # 추적용 digest 는 Resolve image references 스텝 로그에 남긴다.
       api-image: ${{ steps.images.outputs.api }}
       migrator-image: ${{ steps.images.outputs.migrator }}
       version: ${{ steps.meta.outputs.version }}
@@ -128,9 +130,10 @@ jobs:
             APP_VERSION=${{ steps.meta.outputs.version }}
             COMMIT_SHA=${{ github.sha }}
 
-      - name: Resolve image digests
+      - name: Resolve image references
         id: images
         env:
+          VERSION: ${{ steps.meta.outputs.version }}
           API_DIGEST: ${{ steps.build-api.outputs.digest }}
           MIGRATOR_DIGEST: ${{ steps.build-migrator.outputs.digest }}
         run: |
@@ -138,9 +141,13 @@ jobs:
           # GHCR 경로는 소문자만 허용 — metadata-action 과 동일하게 정규화한다.
           REPO="$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
           {
-            echo "api=${REGISTRY}/${REPO}-api@${API_DIGEST}"
-            echo "migrator=${REGISTRY}/${REPO}-migrator@${MIGRATOR_DIGEST}"
+            echo "api=${REGISTRY}/${REPO}-api:${VERSION}"
+            echo "migrator=${REGISTRY}/${REPO}-migrator:${VERSION}"
           } >> "$GITHUB_OUTPUT"
+
+          # 배포는 읽기 쉬운 버전 태그로 하되, 어떤 이미지였는지 추적할 수 있게 digest 도 남긴다.
+          echo "api      ${REGISTRY}/${REPO}-api:${VERSION}       (${API_DIGEST})"
+          echo "migrator ${REGISTRY}/${REPO}-migrator:${VERSION}  (${MIGRATOR_DIGEST})"
 
   release:
     name: Migrate and deploy (Northflank template)
@@ -156,8 +163,6 @@ jobs:
         env:
           NF_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
           NF_TEMPLATE: ${{ vars.NORTHFLANK_TEMPLATE_ID }}
-          # 팀 소속 토큰이면 팀 스코프 경로를 써야 한다. 비우면 계정 스코프로 호출한다.
-          NF_TEAM: ${{ vars.NORTHFLANK_TEAM_ID }}
           API_IMAGE: ${{ needs.publish.outputs.api-image }}
           MIGRATOR_IMAGE: ${{ needs.publish.outputs.migrator-image }}
         run: |
@@ -175,11 +180,7 @@ jobs:
           # 시크릿에 개행이 섞여 들어가면 Authorization 헤더가 깨져 401 이 난다.
           TOKEN="$(printf '%s' "${NF_TOKEN}" | tr -d '[:space:]')"
 
-          if [ -n "${NF_TEAM}" ]; then
-            BASE="${NORTHFLANK_API}/v1/teams/${NF_TEAM}/templates/${NF_TEMPLATE}"
-          else
-            BASE="${NORTHFLANK_API}/v1/templates/${NF_TEMPLATE}"
-          fi
+          BASE="${NORTHFLANK_API}/v1/templates/${NF_TEMPLATE}"
           echo "endpoint: ${BASE}/runs"
 
           # 상태 코드와 본문을 나눠 받는다. --fail-with-body 로 받으면 실패 시 본문이 변수에 갇혀
@@ -202,7 +203,7 @@ jobs:
 
           if [ "${HTTP}" != "200" ]; then
             echo "::error::Northflank returned HTTP ${HTTP} for ${BASE}/runs — $(jq -r '.error.message // "no message"' /tmp/nf-run.json 2>/dev/null)"
-            echo "If this is 401 with a team token, set NORTHFLANK_TEAM_ID and retry; run the 'Northflank Check' workflow to find which path answers 200."
+            echo "On 401, run the 'Northflank Token Check' workflow — the token is most likely expired or was revoked."
             exit 1
           fi
 
