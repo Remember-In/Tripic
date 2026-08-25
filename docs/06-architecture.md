@@ -31,7 +31,6 @@ flowchart TD
         S1["Health Check"]
         S2["App Config"]
         S3["Notices"]
-        S4["Terms / Privacy"]
         S5["Version Check"]
         S6["GPS 좌표 수신 없음<br/>EXIF 포함 사진 수신 없음<br/>DB 없음 / ORM 없음"]
     end
@@ -88,7 +87,7 @@ P0에서는 pnpm workspace만 사용. Turborepo는 패키지/캐싱 필요 시�
 | API Docs  | Swagger/OpenAPI (선택)                                     |
 | Container | Dockerfile 기반 배포                                       |
 
-P0 서버 역할: Health Check, App Config, Notices, Terms/Privacy, Version Check, 비위치성 오류 로그(선택).
+P0 서버 역할: Health Check, App Config, Notices, Version Check, 비위치성 오류 로그(선택).
 P0 서버가 하지 않는 일: GPS 좌표 수신, EXIF 포함 사진 수신, 방문 장소 저장, 후보 매칭, OpenAPI 데이터 저장/캐싱 서빙, OpenAPI 프록시(P0 제외).
 
 ### 10.4 P1 이후 서버 확장 후보
@@ -106,7 +105,7 @@ P0 서버가 하지 않는 일: GPS 좌표 수신, EXIF 포함 사진 수신, �
 travel-stamp/
   apps/
     mobile/   # Expo Router 기반 (app/, src/features, src/lib/{kto,storage,query})
-    api/      # NestJS (src/{health,app-config,notices,legal,version}, main.ts)
+    api/      # NestJS (src/{health,app-config,notices,version}, main.ts)
   packages/
     shared/   # types / constants / schemas
     config/   # tsconfig / eslint

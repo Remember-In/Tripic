@@ -9,7 +9,7 @@
 ```txt
 Tripic/
   apps/
-    api/        # @tripic/api — NestJS 비위치성 운영 API (health/app-config/notices/legal/version)
+    api/        # @tripic/api — NestJS API (health/app-config/notices/version + auth/users)
     mobile/     # @tripic/mobile — React Native (placeholder, 추후 Expo 스캐폴딩)
   packages/
     shared/     # @tripic/shared — 공통 타입/상수 (앱·서버 공유 계약)

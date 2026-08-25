@@ -7,7 +7,6 @@ import { UsersModule } from "@/users/users.module";
 import { HealthModule } from "@/health/health.module";
 import { AppConfigModule } from "@/app-config/app-config.module";
 import { NoticesModule } from "@/notices/notices.module";
-import { LegalModule } from "@/legal/legal.module";
 import { VersionModule } from "@/version/version.module";
 
 /**
@@ -26,7 +25,6 @@ import { VersionModule } from "@/version/version.module";
     HealthModule,
     AppConfigModule,
     NoticesModule,
-    LegalModule,
     VersionModule,
   ],
 })
