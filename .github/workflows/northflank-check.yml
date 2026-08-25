@@ -27,7 +27,8 @@ jobs:
         env:
           NF_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
           NF_TEMPLATE: ${{ vars.NORTHFLANK_TEMPLATE_ID }}
-          NF_TEAM: ${{ inputs.teamId }}
+          # 입력이 비어 있으면 릴리스 워크플로와 같은 variable 을 쓴다.
+          NF_TEAM: ${{ inputs.teamId || vars.NORTHFLANK_TEAM_ID }}
         run: |
           set -uo pipefail
           API=https://api.northflank.com
@@ -52,6 +53,12 @@ jobs:
             let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
               const parts = s.trim().split(".");
               if (parts.length !== 3) return console.log("token: not a JWT — skipping expiry check");
+              // HS256 서명은 base64url 로 항상 43자다. 다르면 복사 과정에서 잘리거나 덧붙은 것이고,
+              // payload 는 멀쩡히 디코드되면서 서명 검증만 실패해 "모르는 토큰"처럼 401 이 난다.
+              console.log("part lengths : header=" + parts[0].length + " payload=" + parts[1].length + " signature=" + parts[2].length);
+              if (parts[2].length !== 43) {
+                console.log("::error::Signature is " + parts[2].length + " chars, expected 43 for HS256 — the stored token is corrupted. Re-copy it with the copy button and update the secret.");
+              }
               try {
                 const p = JSON.parse(Buffer.from(parts[1], "base64url").toString());
                 const now = Math.floor(Date.now() / 1000);
@@ -94,12 +101,19 @@ jobs:
           variant "x-api-key"             -H "x-api-key: ${TRIMMED}"
           echo
 
-          # 401 본문이 "Unauthorized" 한 줄뿐이라 응답 헤더에서 단서를 찾는다.
-          # www-authenticate / x-ratelimit-* 가 있으면 거부 사유를 좁힐 수 있다.
-          echo "=== response headers (GET /v1/projects) ==="
-          curl -sS -D - -o /dev/null -H "Authorization: Bearer ${TRIMMED}" "${API}/v1/projects" 2>/dev/null \
-            | tr -d '\r' \
-            | grep -iE '^(HTTP/|www-authenticate|x-ratelimit|x-request-id|retry-after|server):' || true
+          # 진짜 토큰과 명백한 가짜 토큰의 응답을 나란히 비교한다.
+          # 완전히 같으면 서버가 우리 토큰을 "모르는" 것(폐기/미등록)이고,
+          # 다르면 토큰은 인식하되 권한에서 막는 것이다 — 물어볼 곳이 달라진다.
+          dump() {
+            local label="$1" tok="$2"
+            echo "--- ${label} ---"
+            curl -sS -D - -o /tmp/nf-h.json -H "Authorization: Bearer ${tok}" "${API}/v1/projects" 2>/dev/null \
+              | tr -d '\r' | grep -vaiE '^(date|content-length|x-envoy|alt-svc|strict-transport):' | grep -a ':\|HTTP' || true
+            echo "body: $(head -c 200 /tmp/nf-h.json)"
+          }
+          echo "=== real vs bogus token (GET /v1/projects) ==="
+          dump "real token" "${TRIMMED}"
+          dump "bogus token" "nf-not-a-real-token"
           echo
 
           echo "=== account-scoped ==="
