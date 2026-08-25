@@ -76,3 +76,5 @@ EXPOSE 3000
 # Northflank(쿠버네티스 기반)는 Docker HEALTHCHECK 를 무시하고 플랫폼 probe 를 사용하므로,
 # Northflank 설정에서 HTTP liveness/readiness probe 를 GET /health 로 지정한다.
 CMD ["node", "dist/src/main.js"]
+
+# DB 마이그레이션 이미지는 이 파일에 두지 않는다 — apps/api/Dockerfile.migrate 참고.

@@ -226,8 +226,64 @@ pnpm --filter @tripic/api db:migrate --name <change_name>
 pnpm prisma migrate status
 ```
 
-프로덕션(Northflank): 런타임 이미지에 prisma CLI를 넣지 않는다. 배포 직전 파이프라인에서
-`prisma migrate deploy`를 실행한다 (초기에는 수동 실행 허용).
+### 8.1 프로덕션 릴리스 (자동)
+
+런타임 이미지에는 prisma CLI를 넣지 않는다. 대신 [apps/api/Dockerfile.migrate](../apps/api/Dockerfile.migrate)가
+prisma CLI + `prisma/migrations`만 담은 일회성 이미지를 만들고, 이것을 Northflank Job으로 실행한다.
+실 DB 접속은 Northflank 내부 네트워크에서만 일어나므로 DB를 인터넷에 노출하지 않는다.
+
+`apps/api/Dockerfile`과 스테이지를 공유하지 않으므로(`COPY --from` 없음) 파일을 나눴다.
+한 파일에 두면 "마지막 스테이지 = 기본 target"이라 target을 빠뜨린 빌드가 엉뚱한 이미지를 만든다.
+두 파일의 base image 핀이 갈라지지 않도록 CI의 `Verify base image pin` 스텝이 강제한다.
+
+**배포 순서는 GitHub이 아니라 Northflank 템플릿이 보장한다.**
+[apps/api/northflank.json](../apps/api/northflank.json)이 GitOps로 Northflank 템플릿과 양방향 동기화되며,
+`v*` 태그를 push하면 [server-publish.yml](../.github/workflows/server-publish.yml)이 다음을 수행한다:
+
+```txt
+publish → api / migrator 이미지를 GHCR에 push (태그가 아닌 digest로 고정)
+release → POST /v1/templates/{id}/runs 로 템플릿 실행 + 결과까지 폴링
+             ManualJob            마이그레이션 job 정의(이미지 = ${args.migratorImage})
+             JobRun               prisma migrate deploy 실행
+             Condition(success)   완료·성공까지 대기
+             DeploymentService    api 서비스 이미지를 ${args.apiImage}로 patch
+```
+
+`Condition`이 실패하면 `DeploymentService` 노드가 실행되지 않아 구 버전 앱이 그대로 서비스된다.
+이미지를 태그가 아닌 digest로 넘기므로, 적용된 SQL과 배포된 앱이 같은 커밋임이 보장된다.
+
+**Northflank 사전 설정**
+
+- 템플릿: GitOps를 켜고 레포 `Remember-In/Tripic`, 브랜치 `main`, 파일 `/apps/api/northflank.json`을
+  연결한다. 동기화는 양방향이므로 UI에서 노드를 고치면 레포에 커밋되고, 레포에 push하면 템플릿이 갱신된다.
+  **auto-run은 끈다** — 릴리스는 태그 워크플로가 argument(digest)를 넘겨 실행해야 하고,
+  템플릿 파일이 바뀔 때마다 배포가 돌면 안 된다.
+- 마이그레이션 job의 `DATABASE_URL`은 템플릿에 넣지 않는다(레포에 커밋되므로). Northflank에서
+  Managed Postgres secret group을 job에 연결한다.
+- api 서비스: **자동 배포(auto-deploy)를 끈다.** 켜져 있으면 마이그레이션 완료 전에 새 이미지가
+  먼저 뜰 수 있다. 배포는 템플릿의 `DeploymentService` 노드만 트리거한다.
+- GHCR 패키지는 public으로 둔다(레포가 공개이므로 이미지만 숨길 실익이 없다). 그래서 템플릿에
+  registry credentials를 넣지 않는다. private으로 바꾸면 각 external 이미지에 `credentials`를 추가해야 한다.
+- `billing.deploymentPlan`은 `nf-compute-20`으로 두었다 — 계정에 없는 플랜이면 템플릿 실행이 실패하므로
+  실제 플랜 ID로 맞춘다.
+
+**GitHub 설정** — `production` environment(승인자 지정 권장)에 아래를 둔다.
+
+| 종류     | 이름                     | 값                  |
+| -------- | ------------------------ | ------------------- |
+| secret   | `NORTHFLANK_API_TOKEN`   | Northflank API 토큰 |
+| variable | `NORTHFLANK_TEMPLATE_ID` | 템플릿 ID           |
+
+**템플릿 스키마 주의** — `https://api.northflank.com/v1/schemas/template`으로 검증할 수 있으나,
+최상위가 `additionalProperties: false`에 `apiVersion`/`arguments`/`spec`만 허용하므로 `$schema` 키를
+파일에 넣을 수 없다. 또 `Condition` 노드의 `runId`는 oneOf 브랜치가 "제약 없는 string"과 "`${...}` 패턴"
+두 개라 어떤 참조값이든 둘 다 매치돼 strict 검증에서 실패한다(Northflank 스키마 쪽 문제, 실행에는 무관).
+
+**마이그레이션 작성 제약** — `migrate deploy`는 롤백하지 않는다. 컬럼 DROP·NOT NULL 추가 등
+파괴적 변경은 expand/contract로 나눠 별도 릴리스에 싣는다. 이미 적용된 마이그레이션 파일을
+수정하면 checksum 불일치로 배포가 실패한다(의도된 안전장치 — 새 마이그레이션을 추가할 것).
+데이터가 쌓인 뒤에는 템플릿의 `JobRun` 앞에 `AddonBackup`(Run backup) 노드를 넣어
+마이그레이션 직전 백업을 남기는 것을 검토한다.
 
 ## 9. 위치정보 법률 검토 (기록 서버 저장의 출시 조건)
 

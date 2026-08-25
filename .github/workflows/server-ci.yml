@@ -37,6 +37,19 @@ jobs:
         with:
           persist-credentials: false
 
+      # Dockerfile 과 Dockerfile.migrate 는 스테이지를 공유하지 않으므로 base image 핀이 갈라질 수 있다.
+      # 갈라지면 마이그레이션 이미지만 낡은 base 에 남아 CVE 를 끌고 다니므로 CI 에서 막는다.
+      - name: Verify base image pin
+        run: |
+          set -euo pipefail
+          API_BASE="$(grep -m1 -oE '^FROM node:[^ ]+' apps/api/Dockerfile)"
+          MIGRATE_BASE="$(grep -m1 -oE '^FROM node:[^ ]+' apps/api/Dockerfile.migrate)"
+          if [ "$API_BASE" != "$MIGRATE_BASE" ]; then
+            echo "::error::Base image mismatch — apps/api/Dockerfile uses '${API_BASE}' but apps/api/Dockerfile.migrate uses '${MIGRATE_BASE}'. Keep them identical."
+            exit 1
+          fi
+          echo "Base image pin matches: ${API_BASE}"
+
       - name: Setup pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
 
@@ -189,11 +202,27 @@ jobs:
         with:
           context: .
           file: apps/api/Dockerfile
+          target: runtime
           push: false
           load: true
           tags: tripic-api:test
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
+          build-args: |
+            APP_VERSION=test
+            COMMIT_SHA=${{ github.sha }}
+
+      # 릴리스 때 처음 깨지는 일이 없도록 마이그레이션 이미지도 PR 에서 빌드 검증한다.
+      # (일회성 Job 이미지라 레지스트리에 올리지 않는다)
+      - name: Build Docker image (migrator)
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          file: apps/api/Dockerfile.migrate
+          push: false
+          load: false
+          cache-from: type=gha,scope=migrator
+          cache-to: type=gha,mode=max,scope=migrator
           build-args: |
             APP_VERSION=test
             COMMIT_SHA=${{ github.sha }}
