@@ -198,7 +198,26 @@ erDiagram
 | PATCH  | `/users/me`     | Bearer | `{ nickname }` (trim 2–20자) | `200 { id, nickname }`                                                                |
 
 - 전역 guard(default-deny) + `@Public()` 데코레이터 방식. 기존 운영 API
-  (health/app-config/notices/legal/version)는 `@Public()` 유지.
+  (health/app-config/notices/version)는 `@Public()` 유지.
+
+### 구현 예정 — 회원탈퇴
+
+| Method | Path        | 인증   | 요청 | 응답                                                   |
+| ------ | ----------- | ------ | ---- | ------------------------------------------------------ |
+| DELETE | `/users/me` | Bearer | —    | `204` — `users` 행 hard delete (cascade 일괄 파기, §3) |
+
+- 탈퇴 확인은 앱 UX(다이얼로그)에서 처리 — 서버는 멱등하게 삭제만 수행 (이미 없으면 401,
+  guard 통과 불가).
+- 응답 후 앱은 저장된 토큰을 폐기한다. 서버 측 refresh 토큰은 cascade로 이미 소멸.
+- 카카오 unlink(admin API, `KAKAO_ADMIN_KEY`)는 후속 검토 — 미연동 시 사용자가 카카오
+  계정 설정에서 직접 연결 해제 가능함을 안내.
+- ⚠️ **디자인 공백**: 현재 Figma 설정 화면(46:1245)에는 회원탈퇴 진입점이 없다 — 앱스토어
+  심사는 계정 생성이 있는 앱에 **계정 삭제 기능을 요구**하므로 설정 화면에 탈퇴 항목 추가가
+  필요하다 (디자인 반영 요청).
+- 출시 체크리스트: Google Play는 앱 내 삭제 외에 **앱 미설치 상태에서도 삭제를 요청할 수 있는
+  외부 웹 리소스 URL**을 함께 요구한다
+  ([Play 정책](https://support.google.com/googleplay/android-developer/answer/13327111)) —
+  Notion 페이지 + 접수 이메일로 충족 가능 (심사 제출 전 준비).
 - 요청 검증은 zod (`packages/shared/src/schemas/`에 스키마 배치 — 모바일과 공유).
 
 ## 7. 환경 변수

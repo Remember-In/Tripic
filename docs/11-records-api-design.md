@@ -26,29 +26,33 @@
 
 ## 2. 단계 계획
 
-| Phase | 내용                                                                                 | 게이트                |
-| ----- | ------------------------------------------------------------------------------------ | --------------------- |
-| 1     | 계약(@tripic/shared zod) 확정 + **mock 영속화(in-memory adapter)**로 엔드포인트 동작 | 없음 — 바로 진행      |
-| 2     | in-memory adapter → **Prisma adapter 교체** (DB 스키마·마이그레이션은 이미 존재)     | 없음                  |
-| 3     | record_places API(장소 추가/지역별 조회/지도 스탬프 집계) 설계·추가                  | 위치정보지원센터 검토 |
+| Phase | 내용                                                                                                                            | 게이트                |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
+| 1     | 계약(@tripic/shared zod) 확정 + **mock 영속화(in-memory adapter)**로 엔드포인트 동작                                            | 없음 — 바로 진행      |
+| 2     | in-memory adapter → **Prisma adapter 교체** (records·entries 스키마는 존재, record_photos·hard delete 마이그레이션은 이때 추가) | 없음                  |
+| 3     | record_places API(장소 추가/지역별 조회/지도 스탬프 집계) 설계·추가                                                             | 위치정보지원센터 검토 |
 
 Phase 1의 목적: 모바일이 안정된 계약으로 즉시 개발을 시작할 수 있게 한다.
 헥사고날 구조(apps/api/CLAUDE.md)라 adapter 교체 시 controller/service는 무변경이다.
 
 ## 3. 엔드포인트 명세
 
-| Method | Path                           | 성공 | 설명                                        |
-| ------ | ------------------------------ | ---- | ------------------------------------------- |
-| POST   | `/records`                     | 201  | 기록 생성                                   |
-| GET    | `/records`                     | 200  | 내 기록 목록 (최근 생성순)                  |
-| GET    | `/records/:id`                 | 200  | 상세 + 날짜별 일기 (날짜 오름차순)          |
-| PATCH  | `/records/:id`                 | 200  | 제목/테마/문체/해시태그 부분 수정           |
-| DELETE | `/records/:id`                 | 204  | 기록 **즉시 영구 삭제** (일기·사진 cascade) |
-| PUT    | `/records/:id/entries/:date`   | 200  | 날짜별 일기 작성/수정 (upsert)              |
-| DELETE | `/records/:id/entries/:date`   | 204  | 날짜별 일기 **즉시 영구 삭제**              |
-| POST   | `/records/:id/photos`          | 201  | EXIF 제거 사본 사진 업로드 (§3.1)           |
-| GET    | `/records/:id/photos/:photoId` | 200  | 사진 바이너리 서빙                          |
-| DELETE | `/records/:id/photos/:photoId` | 204  | 사진 **즉시 영구 삭제**                     |
+| Method | Path                                      | 성공 | 설명                                                                               |
+| ------ | ----------------------------------------- | ---- | ---------------------------------------------------------------------------------- |
+| POST   | `/records`                                | 201  | 기록 생성                                                                          |
+| GET    | `/records`                                | 200  | 내 기록 목록 (여행일 최근순 — 아래 정렬 규칙)                                      |
+| GET    | `/records/:id`                            | 200  | 상세 — 일차(날짜)별 일기·사진 (날짜 오름차순)                                      |
+| PATCH  | `/records/:id`                            | 200  | 제목/테마/문체/해시태그 부분 수정                                                  |
+| DELETE | `/records/:id`                            | 204  | 기록 **즉시 영구 삭제** (일기·사진 cascade)                                        |
+| DELETE | `/records`                                | 204  | **내 기록 전체 즉시 영구 삭제** (설정 "전체 기록 초기화" 대응 — 확인 UX는 앱 책임) |
+| PUT    | `/records/:id/days/:date/entry`           | 200  | 날짜별 일기 작성/수정 (upsert)                                                     |
+| DELETE | `/records/:id/days/:date/entry`           | 204  | 날짜별 일기 **즉시 영구 삭제**                                                     |
+| POST   | `/records/:id/days/:date/photos`          | 201  | 해당 일차에 EXIF 제거 사본 사진 업로드 (§3.1)                                      |
+| GET    | `/records/:id/days/:date/photos/:photoId` | 200  | 사진 바이너리 서빙                                                                 |
+| DELETE | `/records/:id/days/:date/photos/:photoId` | 204  | 사진 **즉시 영구 삭제**                                                            |
+
+URL은 **일차(day) 기준**으로 통일한다 — 일기(entry)와 사진(photos)은 형제 관계이므로 둘 다
+`/days/:date` 아래에 둔다 (상세 응답의 `days[]` 구조와 1:1).
 
 **삭제 정책 — 전면 hard delete**: 기록·일기·사진은 물론 **회원 탈퇴를 포함해 모든 삭제는
 지체 없는 물리 삭제**다 (PRD "삭제된 기록은 복구하지 않는다" 및 개인정보보호법의 지체 없는
@@ -75,6 +79,8 @@ Phase 1의 목적: 모바일이 안정된 계약으로 즉시 개발을 시작�
   "style": "EMOTIONAL_ESSAY",
   "hashtags": ["#경주", "#가족"],
   "entryCount": 0,
+  "startDate": null, // 일기·사진이 있는 날짜의 min (YYYY-MM-DD) — 목록 카드의 "2026.07.22-23" 표시용
+  "endDate": null,   // max — 둘 다 없으면 null
   "createdAt": "2026-08-21T12:00:00.000Z",
   "updatedAt": "2026-08-21T12:00:00.000Z"
 }
@@ -82,28 +88,40 @@ Phase 1의 목적: 모바일이 안정된 계약으로 즉시 개발을 시작�
 
 ### GET /records — 내 기록 목록
 
-`RecordSummary[]` — `createdAt` 내림차순(최근 생성순). Figma "내 여행 기록"의 기본 정렬.
-(지역별 필터는 record_places 소관이라 Phase 3에서 추가한다. 페이지네이션은 기록 수가
+`RecordSummary[]` — 정렬은 **여행일 기준 최근순**: `endDate` 내림차순, `endDate`가 null이면
+`createdAt`으로 대체. Figma "내 여행 기록" 최근순 탭(카드에 제목 + "2026.07.22-23" 날짜 범위
+표시)과 일치한다 — 날짜 범위는 `startDate`/`endDate`로 렌더링.
+(지역 탭·지역별 필터는 record_places 소관이라 Phase 3에서 추가한다. 페이지네이션은 기록 수가
 문제되기 전까지 도입하지 않는다 — 필요 시 cursor 방식으로 확장.)
 
 ### GET /records/:id — 상세
 
 ```jsonc
-// 200 응답 — RecordDetail (RecordSummary 에서 entryCount 대신 entries)
+// 200 응답 — RecordDetail (RecordSummary 에서 entryCount 대신 days)
 {
   "id": "0192…",
   "title": "경주 여행",
   "theme": "NATURE_SCENERY",
   "style": "EMOTIONAL_ESSAY",
   "hashtags": ["#경주"],
-  "entries": [
-    // 날짜 오름차순
+  "days": [
+    // 일차(날짜) 오름차순 — Figma 상세 화면의 "1일차 2026.07.22" 그룹과 1:1.
+    // 일기(entry)와 사진(photos)은 date 를 공유하는 형제 관계 — 일기 없이 사진만 있는 일차도 가능
     {
       "date": "2026-08-15",
-      "content": "석양이 물드는 안압지를 걸었다.",
-      "source": "AI", // USER | AI — AI 생성 or 직접 작성 (Figma Flow)
-      "createdAt": "2026-08-21T12:10:00.000Z",
-      "updatedAt": "2026-08-21T12:10:00.000Z",
+      "entry": {
+        // 없으면 null
+        "content": "석양이 물드는 안압지를 걸었다.",
+        "source": "AI", // USER | AI — AI 생성 or 직접 작성 (Figma Flow)
+        "createdAt": "2026-08-21T12:10:00.000Z",
+        "updatedAt": "2026-08-21T12:10:00.000Z",
+      },
+      "photos": [
+        {
+          "id": "0193…",
+          "url": "/records/0192…/days/2026-08-15/photos/0193…",
+        },
+      ],
     },
   ],
   "createdAt": "2026-08-21T12:00:00.000Z",
@@ -121,26 +139,35 @@ Phase 1의 목적: 모바일이 안정된 계약으로 즉시 개발을 시작�
 // 200 응답 — RecordSummary
 ```
 
-### PUT /records/:id/entries/:date — 일기 upsert
+### PUT /records/:id/days/:date/entry — 일기 upsert
 
 `:date`는 `YYYY-MM-DD`. 같은 날짜에 다시 쓰면 교체된다 (DB `UNIQUE(recordId, date)`와 일치 — 하루 1편).
 
 ```jsonc
 // 요청
 { "content": "첫째 날 일기…", "source": "USER" } // content trim 1–5000자
-// 200 응답 — RecordEntryView (상세의 entries 요소와 동일 shape)
+// 200 응답 — 상세 응답 days[].entry 와 동일 shape
 ```
 
-### 3.1 사진 업로드 (PoC 채택)
+### 3.1 사진 업로드 (PoC 채택) — 일차(날짜) 소속
 
 기기 변경 시 기록↔사진 복원을 위해 **EXIF 제거 사본**을 서버에 저장한다 (PRD가 허용한 경로,
 법적 판단은 [12-location-law.md](./12-location-law.md) §3-⑥).
+
+**소속 모델**: Figma 기록 생성·상세 화면 모두 사진이 "N일차" 그룹 아래에 붙으므로, 사진은
+기록이 아니라 **일차(날짜) 소속**이다. 다만 일기 없이 사진만 있는 일차가 존재하므로 사진은
+entry FK가 아닌 **(recordId, date)를 직접 갖는다** — entry와 date를 공유하는 형제 관계
+(`UNIQUE(recordId, date)` 제약은 entry에만 적용). 스키마: `record_photos(id, recordId FK,
+date, data bytea, mimeType, size, createdAt)` — 구현 브랜치에서 마이그레이션.
 
 - **클라이언트**: 디코드 → 리사이즈 → **재인코딩**으로 업로드 사본 생성 — 재인코딩은 EXIF를
   구조적으로 소멸시켜 "제거 누락" 결함을 원천 차단한다.
 - **서버 검증**: 업로드 스트림 단계의 크기 제한(예: 1MB) + MIME 문자열이 아닌 **실제 이미지
   디코딩 검증**(jpeg/webp) + **모든 메타데이터(EXIF·XMP·GPS) 부재 검증**
   (이중 안전장치 — 위치 메타데이터가 감지되면 400 거부).
+- **디코딩 DoS 방어**: 작은 압축 파일이 거대한 픽셀로 풀리는 decompression bomb 대비 —
+  **최대 가로·세로(예: 4096px)·총 픽셀 수 제한**, 디코딩 타임아웃, 동시 디코딩 수 제한을 둔다
+  (파일 크기·사용자 할당량만으로는 단일 요청 공격을 막지 못함).
 - **서빙**: `Content-Type` 명시 + `X-Content-Type-Options: nosniff` 헤더로 콘텐츠 스니핑 차단.
 - **저장**: PoC는 PostgreSQL `bytea`(`record_photos` 테이블 — 구현 브랜치에서 마이그레이션 추가).
   규모 증가 시 오브젝트 스토리지로 이관하는 경로를 열어둔다.
@@ -149,6 +176,44 @@ Phase 1의 목적: 모바일이 안정된 계약으로 즉시 개발을 시작�
   구체 수치는 구현 시 확정 (PoC TODO).
 - **동의**: 사진 없이도 서비스 이용이 가능하므로 **선택 동의** + 처리방침 항목 명시, 탈퇴·삭제 시
   파기(위 hard delete 정책).
+
+### 3.2 AI 일기 생성 (Figma "AI 자동 생성" 버튼)
+
+LLM API 키를 앱에 넣을 수 없으므로 **서버가 LLM 프록시** 역할을 한다. 생성만 하고 저장하지
+않는다 — 사용자가 검토 후 기존 `PUT /records/:id/days/:date/entry`로 저장한다 (Figma의
+"AI 기록 검토" 흐름 및 사용자 확정 원칙과 일치).
+
+| Method | Path                               | 성공 | 설명                       |
+| ------ | ---------------------------------- | ---- | -------------------------- |
+| POST   | `/records/:id/days/:date/generate` | 200  | 해당 날짜의 일기 초안 생성 |
+
+```jsonc
+// 요청 — 소재는 앱이 화면에 띄운 정보를 그대로 전달 (서버는 저장하지 않고 프롬프트에만 사용)
+{
+  "placeNames": ["동궁과 월지", "황리단길"], // 선택 — KTO 실시간 조회 결과의 관광지명
+  "memo": "저녁에 야경을 봤다"               // 선택 — 사용자 힌트 (trim ≤500자)
+}
+// 200 응답
+{ "content": "석양이 물드는 안압지를 걸었다…", "source": "AI" }
+```
+
+- **문체·테마**: 기록의 `style`/`theme` 값을 서버가 읽어 프롬프트에 반영한다
+  (미설정 시 기본 문체). 문체별 예시는 §4 enum과 Figma 화면 문구를 따른다.
+- **관광지명의 일시 처리(수신 후 즉시 폐기)**: 요청의 `placeNames`는 서버가 **수신은 하되
+  저장하지 않고** LLM 호출에만 일시 사용 후 폐기한다 — 이는 기존 미수신 원칙에 대해 **새로
+  승인한 서버 측 일시 처리 예외**다 (§6·상위 문서에 예외로 명시). 이를 보장하기 위해:
+  애플리케이션·프록시·APM **로그에서 요청 본문을 마스킹**하고, LLM 제공자 선정 시
+  **무보관(zero-retention)·비학습 정책을 확인**하며, 개인정보 처리방침과 Play Data Safety에
+  **제3자(LLM) 제공 목적을 명시**한다.
+- **AI 콘텐츠 안전장치**: Google Play는 AI 생성 콘텐츠 앱에 **앱 내 신고/플래그 기능**을
+  요구한다 ([Play AI 정책](https://support.google.com/googleplay/android-developer/answer/17190352)).
+  구현 전까지는 `features.aiDiary=false`로 출시하고, 활성화 시 생성 결과 신고 동작과 제한
+  콘텐츠 필터(프롬프트/출력)를 함께 구현한다.
+- **에러**: LLM 실패/타임아웃 → `502` (앱은 재시도 또는 직접 작성 유도 — 생성 실패가 기록
+  저장 실패로 이어지지 않는다, PRD 6.9 원칙). 사용자별 rate limit(예: 10회/시간) 초과 → `429`.
+- **LLM 제공자는 미정** — 스펙은 제공자 중립으로 유지하고(요청/응답 계약은 제공자와 무관),
+  구현 시 확정한다 (후보: Claude/OpenAI 등). API 키는 서버 전용 env로 관리하며 그 전까지
+  `app-config`의 `features.aiDiary`를 `false`로 두면 앱 노출을 막을 수 있다.
 
 ## 4. Enum (Figma "AI 기록 생성 설정" 화면)
 
@@ -180,7 +245,8 @@ DB의 Prisma enum(`apps/api/prisma/schema.prisma`)과 값이 동일하다.
 - `GET /records?area=…` — 지역별 필터, `GET /map/progress` — 방문 시·군 X/157 집계
 - 장소명("수성못")·지역명("대구광역시, 수성구")은 저장하지 않고 화면 표시 시 `contentId`·
   지역코드로 KTO OpenAPI를 실시간 조회해 렌더링한다
-- GPS 좌표·EXIF·KTO 원천 데이터(관광지명/주소/이미지)는 어떤 경우에도 받지도 저장하지도 않는다
+- GPS 좌표·EXIF·KTO 원천 데이터(관광지명/주소/이미지)는 **저장하지 않으며**, 수신도 하지 않는다
+  — 단 AI 일기 생성 요청의 관광지명은 §3.2의 일시 처리(수신 후 즉시 폐기) 예외를 따른다
 
 ## 7. 구현 원칙 (apps/api/CLAUDE.md)
 
