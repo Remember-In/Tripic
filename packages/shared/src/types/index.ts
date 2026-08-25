@@ -9,9 +9,7 @@
 
 /** 방문지 매칭 방식 (PRD 6.5) */
 export type MatchMethod =
-  | "GPS_CANDIDATE"
-  | "MANUAL_SEARCH"
-  | "MANUAL_REGION_SELECT";
+  "GPS_CANDIDATE" | "MANUAL_SEARCH" | "MANUAL_REGION_SELECT";
 
 /** 매칭 신뢰도 (PRD 6.4) */
 export type MatchConfidence = "HIGH" | "MEDIUM" | "LOW" | "MANUAL";

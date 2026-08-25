@@ -38,47 +38,66 @@ curl http://localhost:3000/health     # → {"status":"ok"}
 
 ```bash
 docker compose up -d db                                # postgres 18 (호스트 포트 48291)
-cp apps/api/.env.example apps/api/.env                 # DATABASE_URL 준비
+cp apps/api/.env.example apps/api/.env                 # env 준비 후 SECRET/KAKAO_APP_ID 채우기
 pnpm --filter @tripic/api db:migrate                   # 마이그레이션 적용 (스키마 변경 시 --name 지정)
+pnpm --filter @tripic/api db:generate                  # Prisma client 생성 (src/generated, 미커밋)
 pnpm prisma migrate status                             # 적용 상태 확인 (apps/api에서)
 ```
 
 Prisma 7 규칙에 따라 datasource url은 `prisma.config.ts`에서 관리한다 (schema.prisma에는 없음).
 설계 배경과 ERD는 [docs/10-auth-db-design.md](../../docs/10-auth-db-design.md) 참고.
 
-## 엔드포인트 (PRD 14.2)
+## 엔드포인트 (PRD 14.2 + docs/10 §6)
 
-| Method | Path             | 설명                   | 상태           |
-| ------ | ---------------- | ---------------------- | -------------- |
-| GET    | `/health`        | 서버 상태 확인         | ✅ 동작        |
-| GET    | `/app-config`    | 앱 설정값 조회         | ⏳ 스텁 (TODO) |
-| GET    | `/notices`       | 공지사항 조회          | ⏳ 스텁 (TODO) |
-| GET    | `/legal/terms`   | 이용약관 조회          | ⏳ 스텁 (TODO) |
-| GET    | `/legal/privacy` | 개인정보 처리방침 조회 | ⏳ 스텁 (TODO) |
-| GET    | `/version`       | 앱 최소 지원 버전 조회 | ⏳ 스텁 (TODO) |
+| Method | Path             | 인증   | 설명                           | 상태           |
+| ------ | ---------------- | ------ | ------------------------------ | -------------- |
+| GET    | `/health`        | 공개   | 서버 상태 확인                 | ✅ 동작        |
+| POST   | `/auth/kakao`    | 공개   | 카카오 토큰 교환 로그인/가입   | ✅ 동작        |
+| POST   | `/auth/refresh`  | 공개   | refresh rotation (재사용 감지) | ✅ 동작        |
+| POST   | `/auth/logout`   | Bearer | refresh family 전체 revoke     | ✅ 동작        |
+| GET    | `/users/me`      | Bearer | 내 프로필                      | ✅ 동작        |
+| PATCH  | `/users/me`      | Bearer | 닉네임 설정/변경 (온보딩)      | ✅ 동작        |
+| GET    | `/app-config`    | 공개   | 앱 설정값 조회                 | ⏳ 스텁 (TODO) |
+| GET    | `/notices`       | 공개   | 공지사항 조회                  | ⏳ 스텁 (TODO) |
+| GET    | `/legal/terms`   | 공개   | 이용약관 조회                  | ⏳ 스텁 (TODO) |
+| GET    | `/legal/privacy` | 공개   | 개인정보 처리방침 조회         | ⏳ 스텁 (TODO) |
+| GET    | `/version`       | 공개   | 앱 최소 지원 버전 조회         | ⏳ 스텁 (TODO) |
 
-스텁 라우트는 골격만 있고 실제 운영 데이터 연결은 다음 단계에서 진행한다.
+전역 guard 는 default-deny — `@Public()` 라우트만 인증 없이 접근 가능하다.
+개발 원칙(TDD·헥사고날·SOLID)은 [CLAUDE.md](./CLAUDE.md) 참고.
 
 ## 구조
 
 ```txt
 apps/api/
   src/
-    main.ts              # 부트스트랩 (NestFactory)
-    app.module.ts        # 루트 모듈 (운영 모듈 등록)
-    health/              # GET /health
-    app-config/          # GET /app-config
-    notices/             # GET /notices
-    legal/               # GET /legal/terms, /legal/privacy
-    version/             # GET /version
+    main.ts              # 부트스트랩 (NestFactory + enableShutdownHooks)
+    app.module.ts        # 루트 모듈 (ConfigModule.validate + 도메인/운영 모듈)
+    config/env.ts        # zod 환경변수 스키마 (부팅 시 검증)
+    prisma/              # PrismaModule/PrismaService (driver adapter)
+    generated/prisma/    # Prisma client (미커밋 — pnpm db:generate 로 생성)
+    common/              # ZodValidationPipe
+    auth/                # 카카오 로그인 bounded context (헥사고날 — CLAUDE.md)
+      auth.controller.ts #   inbound adapter
+      auth.service.ts    #   application core (rotation/재사용 감지 정책)
+      ports/             #   KakaoVerifier · AuthAccounts · RefreshTokens
+      adapters/          #   kakao-api(fetch) · prisma-* 어댑터
+      jwt-auth.guard.ts  #   전역 default-deny guard (+@Public/@CurrentUser)
+    users/               # 프로필 bounded context (ports/adapters 동일 구조)
+    health/ app-config/ notices/ legal/ version/   # 비위치성 운영 API (@Public)
   test/
+    global-setup.e2e.ts  # Testcontainers Postgres + prisma migrate deploy
+    setup-env.e2e.ts     # 컨테이너 DATABASE_URL 주입
     app.e2e-spec.ts      # e2e (Vitest + PactumJS)
+    auth.e2e-spec.ts     # 로그인/refresh rotation/logout e2e (카카오 port stub)
+  prisma/                # schema.prisma + migrations
+  prisma.config.ts       # Prisma 7 datasource url 관리
   nest-cli.json          # builder: swc, typeCheck: true
   .swcrc                 # SWC 설정 (데코레이터 메타데이터 + @/ paths 재작성)
   tsconfig.json          # @tripic/tsconfig/base.json extends, types:[node], paths @/*
   tsconfig.build.json    # 빌드용 (test 제외)
   vitest.config.ts       # 단위 테스트
-  vitest.config.e2e.ts   # e2e 테스트
+  vitest.config.e2e.ts   # e2e 테스트 (globalSetup/env)
 ```
 
 ## 빌드 / 타입체크 / 테스트

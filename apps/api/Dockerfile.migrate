@@ -1,0 +1,50 @@
+# syntax=docker/dockerfile:1
+#
+# prisma migrate deploy 전용 일회성 이미지 (Northflank Job 용)
+#
+# 런타임 이미지에는 prisma CLI 를 넣지 않는다는 원칙(docs/10-auth-db-design.md §8)에 따라,
+# 마이그레이션 SQL + prisma CLI 만 담은 별도 이미지를 만든다.
+# 실 DB 접속은 Northflank 내부 네트워크에서만 일어난다 — DB 를 인터넷에 노출하지 않는다.
+#
+# apps/api/Dockerfile 과 스테이지를 공유하지 않으므로(COPY --from 없음) 파일을 분리했다.
+# 분리 이유: 같은 파일에 두면 "마지막 스테이지 = 기본 target" 이라 target 을 빠뜨린 빌드가
+# 엉뚱한 이미지를 만든다.
+#
+# 중요: 이 Dockerfile 도 레포 루트를 빌드 컨텍스트로 가정한다.
+#   - 로컬 빌드: docker build -f apps/api/Dockerfile.migrate -t tripic-migrator .
+#
+# base image 는 apps/api/Dockerfile 과 동일하게 유지한다 (CI 의 "Verify base image pin" 이 강제).
+FROM node:24.18.0-alpine3.24
+ENV NODE_ENV=production
+WORKDIR /app
+
+# devDependencies 에 선언된 prisma 레인지를 그대로 써서 CLI 만 설치한다.
+# Prisma 7 CLI 는 Rust 엔진이 없는 순수 JS 다.
+# 설치 직후 npm/corepack/yarn 을 제거한다(runtime 이미지와 동일한 이유 — 공격 표면·스캔 오탐 축소).
+COPY apps/api/package.json /tmp/api-package.json
+RUN PRISMA_RANGE="$(node -p "require('/tmp/api-package.json').devDependencies.prisma")" \
+    && node -p "JSON.stringify({name:'tripic-migrator',private:true,type:'commonjs'})" > package.json \
+    && npm install --no-audit --no-fund --omit=optional "prisma@${PRISMA_RANGE}" \
+    && rm -f /tmp/api-package.json \
+    && rm -rf /root/.npm \
+       /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+       /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+       /opt/yarn-v* /usr/local/bin/yarn /usr/local/bin/yarnpkg \
+    && chown -R node:node /app
+
+ARG APP_VERSION
+ARG COMMIT_SHA
+LABEL org.opencontainers.image.title="tripic-migrator" \
+      org.opencontainers.image.version="${APP_VERSION}" \
+      org.opencontainers.image.revision="${COMMIT_SHA}"
+
+# prisma.config.ts 가 schema/migrations 경로와 datasource(DATABASE_URL) 를 결정한다.
+COPY --chown=node:node apps/api/prisma ./prisma
+COPY --chown=node:node apps/api/prisma.config.ts ./prisma.config.ts
+
+USER node
+
+# DATABASE_URL 은 Northflank Job 의 secret 으로 주입한다.
+# migrate deploy 는 대화형 프롬프트·shadow DB 없이 미적용 마이그레이션만 순서대로 적용하고,
+# 이미 적용된 마이그레이션 파일이 수정됐으면 checksum 불일치로 실패한다(안전한 실패).
+CMD ["node_modules/.bin/prisma", "migrate", "deploy"]

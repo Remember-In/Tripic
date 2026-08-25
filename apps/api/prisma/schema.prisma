@@ -3,9 +3,15 @@
 // 여행 기록은 사용자가 직접 확정한 값(contentId, 방문일, 일기 본문)만 저장한다.
 // 단, 계정별 방문 기록의 서버 저장은 위치정보지원센터 사전 검토 후 출시한다.
 
-// generator는 auth API 구현 브랜치에서 추가한다 (Prisma 7 "prisma-client" generator +
-// @prisma/adapter-pg, apps/api가 CJS 출력이므로 moduleFormat = "cjs").
 // datasource url은 prisma.config.ts에서 관리한다 (Prisma 7).
+// 생성 클라이언트는 커밋하지 않는다 — 로컬/CI/Docker에서 `pnpm prisma generate`로 생성.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  // apps/api는 CJS로 컴파일되므로 (루트 "type": "module"이지만 api엔 type 필드 없음)
+  moduleFormat = "cjs"
+}
 
 datasource db {
   provider = "postgresql"
