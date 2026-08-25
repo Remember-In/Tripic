@@ -45,6 +45,27 @@ jobs:
             echo "::warning::Token contains whitespace — a trailing newline in the secret breaks the Authorization header."
           fi
           echo "template id: ${NF_TEMPLATE:-<unset>}"
+
+          # Northflank 토큰은 JWT 다. 서명은 건드리지 않고 payload 의 만료·소속만 찍는다.
+          # (기본 발급이 24시간짜리라, 오래된 값이 secret 에 남아 있으면 모든 경로가 401 이 된다)
+          printf '%s' "${NF_TOKEN}" | node -e '
+            let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+              const parts = s.trim().split(".");
+              if (parts.length !== 3) return console.log("token: not a JWT — skipping expiry check");
+              try {
+                const p = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+                const now = Math.floor(Date.now() / 1000);
+                console.log("token issued : " + (p.iat ? new Date(p.iat * 1000).toISOString() : "?"));
+                console.log("token expires: " + (p.exp ? new Date(p.exp * 1000).toISOString() : "?"));
+                console.log("token scope  : " + p.entityType + " / role " + p.roleInternalId);
+                console.log("token name   : " + p.tokenInternalId);
+                if (p.exp && p.exp < now) {
+                  console.log("::error::TOKEN EXPIRED " + Math.round((now - p.exp) / 3600) + "h ago — regenerate it and update the NORTHFLANK_API_TOKEN secret.");
+                } else if (p.exp) {
+                  console.log("token valid for another " + Math.round((p.exp - now) / 3600) + "h");
+                }
+              } catch { console.log("token: payload decode failed"); }
+            });'
           echo
 
           probe() {
