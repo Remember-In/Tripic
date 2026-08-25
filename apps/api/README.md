@@ -1,6 +1,6 @@
 # @tripic/api
 
-Tripic의 **비위치성 운영 API** 서버 (NestJS). 공지·약관·앱 설정·버전 체크 등 운영 기능만 담당한다.
+Tripic의 백엔드 API 서버 (NestJS) — **비위치성 운영 API**(공지·약관·앱 설정·버전)와 **계정/인증**(카카오 로그인, 구현 완료), **여행 기록 콘텐츠**(설계 단계)를 담당한다.
 
 > 설계 원칙 (PRD 10.3 / 14.2):
 >
@@ -8,7 +8,7 @@ Tripic의 **비위치성 운영 API** 서버 (NestJS). 공지·약관·앱 설�
 > - 관광공사 OpenAPI 호출/데이터 저장을 하지 않는다 (앱이 직접 호출).
 > - **P0에서는 DB/ORM을 사용하지 않는다.**
 >   P1 확장으로 **계정/인증(카카오 로그인) + 사용자 확정 여행 기록** PostgreSQL + Prisma 스키마를 도입했다
->   (여행 기록은 스키마만 준비 — 동기화 API 노출은 위치정보지원센터 사전 검토 후) —
+>   (기록 콘텐츠 API는 설계 완료([docs/11](../../docs/11-records-api-design.md)), 방문 관광지 API만 위치정보지원센터 사전 검토 후 노출) —
 >   [docs/10-auth-db-design.md](../../docs/10-auth-db-design.md) 참고. GPS·위치·KTO 원천 데이터는 여전히 저장하지 않는다.
 
 ## 실행
@@ -49,19 +49,20 @@ Prisma 7 규칙에 따라 datasource url은 `prisma.config.ts`에서 관리한�
 
 ## 엔드포인트 (PRD 14.2 + docs/10 §6)
 
-| Method | Path             | 인증   | 설명                           | 상태           |
-| ------ | ---------------- | ------ | ------------------------------ | -------------- |
-| GET    | `/health`        | 공개   | 서버 상태 확인                 | ✅ 동작        |
-| POST   | `/auth/kakao`    | 공개   | 카카오 토큰 교환 로그인/가입   | ✅ 동작        |
-| POST   | `/auth/refresh`  | 공개   | refresh rotation (재사용 감지) | ✅ 동작        |
-| POST   | `/auth/logout`   | Bearer | refresh family 전체 revoke     | ✅ 동작        |
-| GET    | `/users/me`      | Bearer | 내 프로필                      | ✅ 동작        |
-| PATCH  | `/users/me`      | Bearer | 닉네임 설정/변경 (온보딩)      | ✅ 동작        |
-| GET    | `/app-config`    | 공개   | 앱 설정값 조회                 | ⏳ 스텁 (TODO) |
-| GET    | `/notices`       | 공개   | 공지사항 조회                  | ⏳ 스텁 (TODO) |
-| GET    | `/legal/terms`   | 공개   | 이용약관 조회                  | ⏳ 스텁 (TODO) |
-| GET    | `/legal/privacy` | 공개   | 개인정보 처리방침 조회         | ⏳ 스텁 (TODO) |
-| GET    | `/version`       | 공개   | 앱 최소 지원 버전 조회         | ⏳ 스텁 (TODO) |
+| Method | Path             | 인증   | 설명                                | 상태                                                     |
+| ------ | ---------------- | ------ | ----------------------------------- | -------------------------------------------------------- |
+| GET    | `/health`        | 공개   | 서버 상태 확인                      | ✅ 동작                                                  |
+| POST   | `/auth/kakao`    | 공개   | 카카오 토큰 교환 로그인/가입        | ✅ 동작                                                  |
+| POST   | `/auth/refresh`  | 공개   | refresh rotation (재사용 감지)      | ✅ 동작                                                  |
+| POST   | `/auth/logout`   | Bearer | refresh family 전체 revoke          | ✅ 동작                                                  |
+| GET    | `/users/me`      | Bearer | 내 프로필                           | ✅ 동작                                                  |
+| PATCH  | `/users/me`      | Bearer | 닉네임 설정/변경 (온보딩)           | ✅ 동작                                                  |
+| GET    | `/app-config`    | 공개   | 앱 설정값 조회                      | ⏳ 스텁 (TODO)                                           |
+| GET    | `/notices`       | 공개   | 공지사항 조회                       | ⏳ 스텁 (TODO)                                           |
+| GET    | `/legal/terms`   | 공개   | 이용약관 조회                       | ⏳ 스텁 (TODO)                                           |
+| GET    | `/legal/privacy` | 공개   | 개인정보 처리방침 조회              | ⏳ 스텁 (TODO)                                           |
+| GET    | `/version`       | 공개   | 앱 최소 지원 버전 조회              | ⏳ 스텁 (TODO)                                           |
+| \*     | `/records...`    | Bearer | 여행 기록 콘텐츠 CRUD + 날짜별 일기 | 📝 설계 ([docs/11](../../docs/11-records-api-design.md)) |
 
 전역 guard 는 default-deny — `@Public()` 라우트만 인증 없이 접근 가능하다.
 개발 원칙(TDD·헥사고날·SOLID)은 [CLAUDE.md](./CLAUDE.md) 참고.

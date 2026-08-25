@@ -1,13 +1,13 @@
 # 카카오 소셜 로그인 인증/DB 설계 (P1 확장)
 
-| 항목      | 내용                                                                                      |
-| --------- | ----------------------------------------------------------------------------------------- |
-| 상태      | 설계 확정 (스키마/마이그레이션 반영 완료, API 구현은 후속 브랜치)                         |
-| 근거      | [docs/06-architecture.md](./06-architecture.md) §10.4 P1 확장 후보 (PostgreSQL + Prisma)  |
-| 디자인    | Figma 로그인 화면 — "카카오로 시작하기" 단일 버튼, AI 기록 생성 설정, 내 여행 기록        |
-| 플로우    | Figma Flow — 최초 실행 → 회원가입 여부 → (신규) 닉네임/권한 설정 → 카카오 로그인 → 홈     |
-| 핵심 제약 | GPS 좌표·EXIF 원본·KTO 원천 데이터는 서버 DB에 저장하지 않는다                            |
-| 법률 조건 | 계정별 방문 기록(관광지 확정값)의 서버 저장은 **위치정보지원센터 사전 검토 후 출시** (§9) |
+| 항목      | 내용                                                                                                                                                                                            |
+| --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 상태      | auth/users API 구현 완료 · hard delete 전환·회원탈퇴 API 구현 예정 · 기록/사진 API 설계 단계                                                                                                    |
+| 근거      | [docs/06-architecture.md](./06-architecture.md) §10.4 P1 확장 후보 (PostgreSQL + Prisma)                                                                                                        |
+| 디자인    | Figma 로그인 화면 — "카카오로 시작하기" 단일 버튼, AI 기록 생성 설정, 내 여행 기록                                                                                                              |
+| 플로우    | Figma Flow — 최초 실행 → 회원가입 여부 → (신규) 닉네임/권한 설정 → 카카오 로그인 → 홈                                                                                                           |
+| 핵심 제약 | GPS 좌표·EXIF 원본·KTO 원천 데이터는 서버 DB에 저장하지 않는다                                                                                                                                  |
+| 법률 조건 | 방문 관광지(record_places)의 서버 저장·노출은 **위치정보지원센터 사전 검토 후 출시** (§9). 기록 콘텐츠(제목·일기·해시태그)는 대상 아님 — [11-records-api-design.md](./11-records-api-design.md) |
 
 ---
 
@@ -18,15 +18,17 @@
   GPS 좌표·EXIF 사진·KTO OpenAPI 원천 데이터는 어떤 테이블에도 저장하지 않는다.
   - 저장하는 것: 기록 제목/테마/문체/해시태그, 날짜별 일기 본문(AI 생성 또는 직접 작성),
     사용자가 확정한 관광지의 KTO `contentId` + 지역/분류 코드 + 방문일.
-  - 저장하지 않는 것: 사진(EXIF 포함 원본/사본), GPS 위도·경도, 관광지명/주소/소개/이미지
-    등 KTO 원천 데이터(화면 표시 시 OpenAPI 실시간 조회).
+  - 저장하는 것(선택): **EXIF 등 위치 메타데이터를 제거한 사진 사본** — 기기 변경 시 복원용,
+    선택 동의 기반 (계약: [11-records-api-design.md](./11-records-api-design.md) §3.1).
+  - 저장하지 않는 것: 사진 원본 및 위치 메타데이터가 포함된 일체의 사진, GPS 위도·경도,
+    관광지명/주소/소개/이미지 등 KTO 원천 데이터(화면 표시 시 OpenAPI 실시간 조회).
 - Prisma CLI(**v7**)는 글로벌 설치 없이 `apps/api` devDependency로 관리한다.
   실행: `pnpm --filter @tripic/api db:migrate` (루트) 또는 `apps/api`에서 `pnpm prisma <cmd>`.
   - Prisma 7 규칙에 따라 datasource url은 schema가 아닌
     [apps/api/prisma.config.ts](../apps/api/prisma.config.ts)에서 관리한다 (`.env`는 node 내장
     `process.loadEnvFile()`로 로드).
-  - client generator는 아직 없다 — auth API 구현 브랜치에서 `prisma-client` generator
-    (`moduleFormat = "cjs"`) + `@prisma/adapter-pg`로 추가한다 (§10).
+  - client generator는 `prisma-client`(`moduleFormat = "cjs"`, output `src/generated` 미커밋)
+    \+ `@prisma/adapter-pg` 조합으로 구성되어 있다 (§10).
 
 ## 2. 인증 방식: 카카오 토큰 교환 (Token Exchange)
 
@@ -75,13 +77,16 @@ sequenceDiagram
 JWT를 refresh 토큰으로 쓰지 않는 이유: 즉시 폐기(서버 측 무효화)가 필요해서 어차피 DB
 조회가 필수이고, 불투명 토큰이 payload 유출 걱정 없이 더 단순하다.
 
-**회원탈퇴(soft delete)와 토큰 무효화**: `onDelete: Cascade`는 실제 행 삭제 시에만 동작하므로
-상태 전환만으로는 refresh token이 살아남는다. 따라서 구현 시 다음 규칙을 따른다.
+**회원탈퇴와 토큰 무효화 — 전면 hard delete 로 정책 변경** (docs/11 삭제 정책과 통일):
 
-- 탈퇴 처리 트랜잭션에서 해당 유저의 **refresh token 전체를 revoke**한다 (`updateMany`).
-- `POST /auth/refresh`는 토큰 검증에 더해 **`user.status === ACTIVE`를 확인**하고 아니면 401.
+- 탈퇴 = **`users` 행 즉시 삭제** → `onDelete: Cascade`로 social_accounts·refresh_tokens·
+  records(일기·사진 포함)까지 일괄 물리 파기. 별도의 토큰 revoke 규칙·`status` 검사·파기
+  배치가 모두 불필요해진다.
+- 초기 스키마의 `UserStatus`/`status`/`deletedAt`(soft delete 대비용)은 이 결정으로 폐기 —
+  **구현 브랜치에서 컬럼 제거 마이그레이션** 및 `status === "ACTIVE"` 검사 코드 제거.
 - access token은 서버 미저장이라 탈퇴 후 최대 15분(TTL) 유효할 수 있다 — 허용 가능한
-  트레이드오프로 두되, 민감 endpoint가 생기면 guard에서 status 조회를 추가한다.
+  트레이드오프. 다만 `/users/me` 등 DB 조회 라우트는 행이 없어 즉시 401이 된다.
+- 실수 탈퇴 복구는 지원하지 않는다(유예 기간 없음) — 탈퇴 확인 UX로 대응.
 
 ## 4. ERD
 
@@ -93,10 +98,10 @@ erDiagram
     users {
         text id PK "uuid(7)"
         text nickname "nullable — 가입 직후 null"
-        UserStatus status "ACTIVE | DELETED"
+        UserStatus status "제거 예정 — 전면 hard delete 정책(§3)"
         timestamp createdAt
         timestamp updatedAt
-        timestamp deletedAt "soft delete"
+        timestamp deletedAt "제거 예정 — hard delete 정책(§3)"
     }
 
     social_accounts {
@@ -136,7 +141,7 @@ erDiagram
         text_arr hashtags "배열"
         timestamp createdAt "INDEX(userId, createdAt DESC)"
         timestamp updatedAt
-        timestamp deletedAt "soft delete"
+        timestamp deletedAt "제거 예정 — hard delete 정책(§3)"
     }
 
     record_entries {
@@ -167,22 +172,22 @@ erDiagram
 
 ## 5. 스키마 결정 근거
 
-| 결정                                                     | 근거                                                                                                             |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `SocialAccount` 별도 테이블 (User에 kakaoId 직저장 대신) | 카카오 단독이지만 `provider` enum + `@@unique([provider, providerUserId])`로 향후 provider 추가 시 스키마 무변경 |
-| ID = `uuid(7)`                                           | UUIDv7은 시간 정렬형이라 B-tree 인덱스 친화적, Prisma 네이티브 지원                                              |
-| `nickname` nullable                                      | 온보딩 플로우상 가입 직후엔 없음 → 닉네임 설정 단계(`PATCH /users/me`)에서 채움                                  |
-| refresh 토큰 해시 저장                                   | DB 유출 시에도 토큰 원문 노출 없음                                                                               |
-| `familyId` 인덱스                                        | 재사용 감지 시 family 전체 revoke(`updateMany`) 성능                                                             |
-| soft delete (`status` + `deletedAt`)                     | 회원탈퇴 유예/복구 정책을 P2에서 결정할 여지. 파기 배치는 추후                                                   |
-| role/권한 컬럼 없음                                      | Flow의 "권한 설정"은 기기 권한(사진 접근) 온보딩이지 서버 롤이 아님                                              |
-| `theme`/`style`은 User가 아닌 Record 소속                | "AI 기록 생성 설정" 화면은 기록 생성 플로우의 일부 — 기록마다 다르게 선택 (계정 기본값 필요 시 추후 컬럼 추가)   |
-| `RecordEntry` 날짜별 분리 + `UNIQUE(recordId, date)`     | Flow 노트 "날짜별로 묶어서 일기 작성" — 하루 1편, AI/직접 작성 구분(`source`)                                    |
-| `RecordPlace`에 코드값만 저장                            | contentId + area/sigungu/category 코드는 KTO 원천 데이터가 아닌 참조 키 — 지역별 조회·시군구 진행률(157) 집계용  |
-| 사진 미저장                                              | 사진은 앱 로컬 자산 참조로만 존재 — 서버는 기록 텍스트와 장소 참조만 보관                                        |
-| `hashtags`는 배열                                        | 태그 검색/추천 고도화 전까지 N:M 테이블은 과설계                                                                 |
+| 결정                                                     | 근거                                                                                                                   |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `SocialAccount` 별도 테이블 (User에 kakaoId 직저장 대신) | 카카오 단독이지만 `provider` enum + `@@unique([provider, providerUserId])`로 향후 provider 추가 시 스키마 무변경       |
+| ID = `uuid(7)`                                           | UUIDv7은 시간 정렬형이라 B-tree 인덱스 친화적, Prisma 네이티브 지원                                                    |
+| `nickname` nullable                                      | 온보딩 플로우상 가입 직후엔 없음 → 닉네임 설정 단계(`PATCH /users/me`)에서 채움                                        |
+| refresh 토큰 해시 저장                                   | DB 유출 시에도 토큰 원문 노출 없음                                                                                     |
+| `familyId` 인덱스                                        | 재사용 감지 시 family 전체 revoke(`updateMany`) 성능                                                                   |
+| ~~soft delete (`status` + `deletedAt`)~~ **폐기 결정**   | 전면 hard delete 정책(§3)으로 변경 — 탈퇴·삭제 모두 즉시 물리 파기(cascade). 컬럼은 구현 브랜치에서 제거               |
+| role/권한 컬럼 없음                                      | Flow의 "권한 설정"은 기기 권한(사진 접근) 온보딩이지 서버 롤이 아님                                                    |
+| `theme`/`style`은 User가 아닌 Record 소속                | "AI 기록 생성 설정" 화면은 기록 생성 플로우의 일부 — 기록마다 다르게 선택 (계정 기본값 필요 시 추후 컬럼 추가)         |
+| `RecordEntry` 날짜별 분리 + `UNIQUE(recordId, date)`     | Flow 노트 "날짜별로 묶어서 일기 작성" — 하루 1편, AI/직접 작성 구분(`source`)                                          |
+| `RecordPlace`에 코드값만 저장                            | contentId + area/sigungu/category 코드는 KTO 원천 데이터가 아닌 참조 키 — 지역별 조회·시군구 진행률(157) 집계용        |
+| 사진 정책                                                | 위치 메타데이터 포함 원본은 미저장 — EXIF 제거 사본만 선택 저장(record_photos, docs/11 §3.1). 원본은 앱 로컬 자산 참조 |
+| `hashtags`는 배열                                        | 태그 검색/추천 고도화 전까지 N:M 테이블은 과설계                                                                       |
 
-## 6. API 명세 초안 (후속 브랜치 `feat/auth-kakao-api`에서 구현)
+## 6. 현행 auth/users API 명세 (구현 완료)
 
 | Method | Path            | 인증   | 요청                         | 응답                                                                                  |
 | ------ | --------------- | ------ | ---------------------------- | ------------------------------------------------------------------------------------- |
@@ -198,13 +203,13 @@ erDiagram
 
 ## 7. 환경 변수
 
-| 변수                   | 용도                                     | 이번 브랜치 |
-| ---------------------- | ---------------------------------------- | ----------- |
-| `DATABASE_URL`         | PostgreSQL 접속 문자열                   | 사용        |
-| `JWT_ACCESS_SECRET`    | JWT 서명 키 (32자 이상)                  | 예고만      |
-| `JWT_ACCESS_TTL_SEC`   | access token 수명 (기본 900)             | 예고만      |
-| `JWT_REFRESH_TTL_DAYS` | refresh token 수명 (기본 30)             | 예고만      |
-| `KAKAO_APP_ID`         | access_token_info의 app_id 대조용 (필수) | 예고만      |
+| 변수                   | 용도                                     | 상태 |
+| ---------------------- | ---------------------------------------- | ---- |
+| `DATABASE_URL`         | PostgreSQL 접속 문자열                   | 사용 |
+| `JWT_ACCESS_SECRET`    | JWT 서명 키 (32자 이상)                  | 사용 |
+| `JWT_ACCESS_TTL_SEC`   | access token 수명 (기본 900)             | 사용 |
+| `JWT_REFRESH_TTL_DAYS` | refresh token 수명 (기본 30)             | 사용 |
+| `KAKAO_APP_ID`         | access_token_info의 app_id 대조용 (필수) | 사용 |
 
 `KAKAO_ADMIN_KEY`는 현재 불필요 — 회원탈퇴 시 서버 측 unlink(admin API)를 도입할 때만 필요.
 템플릿: [apps/api/.env.example](../apps/api/.env.example)
@@ -310,15 +315,20 @@ Northflank 실제 검증은 통과하므로 이 경고는 무시한다.
 ## 9. 위치정보 법률 검토 (기록 서버 저장의 출시 조건)
 
 계정별 방문 기록의 서버 저장은 PRD([08-privacy-risk.md](./08-privacy-risk.md))가 명시한 대로
-**위치정보지원센터 공식 사전 검토 후 출시**한다. 검토 요청 시 논거:
+**위치정보지원센터 공식 사전 검토 후 출시**한다. 법령 조사와 데이터 흐름별 판단·상담 계획은
+[12-location-law.md](./12-location-law.md)에 정리했다. 검토 요청 시 논거:
 
 - 기기에서 수집된 **GPS 좌표(EXIF 포함)는 서버로 전송·저장하지 않는다** — 기존 원칙 유지.
 - 서버에 저장되는 것은 사용자가 화면에서 **직접 선택·확정한 관광지의 KTO contentId와 방문일**뿐이다.
   이는 통신설비로 자동 수집된 위치정보가 아니라 SNS 체크인과 유사한 자기 선언 콘텐츠 성격이다.
 - 좌표 정밀도가 아닌 관광지/지역 코드 단위이며, 실시간 위치가 아닌 과거 방문 기록이다.
 
-검토 결과가 나오기 전까지: 스키마/마이그레이션은 준비하되, 기록 동기화 API의 **프로덕션 노출은 보류**한다.
-검토에서 제약이 확인되면 records/record_entries/record_places 테이블 도입을 재설계한다.
+검토 대상은 **방문 관광지(record_places)에 한정**된다 — 기록 콘텐츠(제목·테마·문체·해시태그·일기)는
+일반 사용자 콘텐츠로 위치정보법 대상이 아니어서 검토와 무관하게 서버 저장/노출 가능하다
+([11-records-api-design.md](./11-records-api-design.md) §1).
+
+검토 결과가 나오기 전까지: 스키마/마이그레이션은 준비하되, record_places 관련 API의 **프로덕션 노출은 보류**한다.
+검토에서 제약이 확인되면 record_places 테이블 도입을 재설계한다.
 
 ## 10. 후속 브랜치 체크리스트 (`feat/auth-kakao-api`) — 완료
 
@@ -331,10 +341,13 @@ Northflank 실제 검증은 통과하므로 이 경고는 무시한다.
 - [x] AuthModule — `ports/`(KakaoVerifier·AuthAccounts·RefreshTokens) + `adapters/`(kakao-api fetch,
       prisma-\*), 전역 JwtAuthGuard + `@Public()`, rotation은 어댑터 트랜잭션으로 원자성 보장
 - [x] `KAKAO_APP_ID` env 필수화 — 미설정 시 부팅 실패, app_id 불일치 시 401 (타 앱 토큰 차단)
-- [x] 탈퇴 계정 검사 — login/refresh/me 에서 `status === ACTIVE` 확인 (§3; 탈퇴 API 자체는 미구현)
+- [x] 탈퇴 계정 검사 — login/refresh/me 에서 `status === ACTIVE` 확인 (구현 당시 §3 규칙;
+      이후 전면 hard delete 정책 변경으로 이 검사·컬럼은 다음 구현 브랜치에서 제거 예정)
 - [x] UsersModule (`GET/PATCH /users/me`, 닉네임 온보딩)
 - [x] 단위 테스트(포트 in-memory fake) + e2e(**Testcontainers** Postgres + PactumJS, 카카오 port stub)
 - [x] Dockerfile: shared build → `prisma generate` → `nest build` — Prisma 7은 엔진 바이너리가 없어
       6에서 우려했던 `pnpm deploy` 재생성 핵과 alpine musl `binaryTargets` 이슈가 사라짐
 
-남은 것: 회원탈퇴 API(탈퇴 트랜잭션에서 refresh token 전체 revoke — §3 규칙 구현처), 여행 기록 API(위치정보지원센터 검토 후).
+남은 것: 회원탈퇴 API(`users` 행 hard delete → cascade 일괄 파기 — §3 정책, status/deletedAt 제거 마이그레이션 포함),
+여행 기록 콘텐츠 API([11-records-api-design.md](./11-records-api-design.md) 설계대로 구현),
+방문 관광지 API(위치정보지원센터 검토 후).

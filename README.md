@@ -60,4 +60,4 @@ pnpm --filter @tripic/api test:e2e    # e2e (pactum)
 curl http://localhost:3000/health     # → {"status":"ok"}
 ```
 
-NestJS 서버는 **비위치성 운영 API에만** 한정한다 (PRD 10.3 / 14.2). GPS 좌표·EXIF 사진·방문 기록을 수신/저장하지 않으며 P0에서 DB/ORM을 사용하지 않는다. P1 확장으로 **계정/인증(카카오 로그인) + 사용자 확정 여행 기록** PostgreSQL + Prisma 스키마를 도입했다 — 여행 기록은 스키마만 준비된 상태로, 동기화 API 노출은 위치정보지원센터 사전 검토 후에만 한다. [docs/10-auth-db-design.md](./docs/10-auth-db-design.md) 참고.
+**P0에서** NestJS 서버는 **비위치성 운영 API에만** 한정했다 (PRD 10.3 / 14.2) — GPS 좌표·EXIF 사진·방문 기록을 수신/저장하지 않고 DB/ORM도 사용하지 않는다. P1 확장으로 **계정/인증(카카오 로그인) + 사용자 확정 여행 기록** PostgreSQL + Prisma 스키마를 도입했다 — 기록 중 **콘텐츠(제목·일기·해시태그 등)는 서버 저장 가능**하고, **방문 관광지(record_places) 부분만** 위치정보지원센터 사전 검토 후 노출한다. [docs/10-auth-db-design.md](./docs/10-auth-db-design.md) · [docs/11-records-api-design.md](./docs/11-records-api-design.md) 참고.
