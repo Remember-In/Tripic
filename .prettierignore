@@ -9,3 +9,8 @@ dist
 
 # Prisma 생성 클라이언트: 커밋/포맷 대상이 아니다 (`pnpm prisma generate`로 생성).
 apps/api/src/generated
+
+# Northflank 템플릿: GitOps 양방향 동기화 대상이라 Northflank 봇이 직접 커밋한다.
+#   봇은 파일 끝 개행 없이 쓰는데 pre-commit 의 *.json prettier 가 다시 넣어 pnpm-lock.yaml 과
+#   같은 왕복 churn 이 생긴다. 포맷 소유권을 Northflank 에 넘긴다.
+apps/api/northflank.json

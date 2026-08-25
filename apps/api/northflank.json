@@ -93,7 +93,7 @@
   },
   "options": {
     "autorun": false,
-    "concurrencyPolicy": "allow"
+    "concurrencyPolicy": "queue"
   },
   "gitops": {
     "repoUrl": "https://github.com/Remember-In/Tripic",

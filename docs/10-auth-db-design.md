@@ -259,13 +259,23 @@ release → POST /v1/templates/{id}/runs 로 템플릿 실행 + 결과까지 폴
   **auto-run은 끈다** — 릴리스는 태그 워크플로가 argument(digest)를 넘겨 실행해야 하고,
   템플릿 파일이 바뀔 때마다 배포가 돌면 안 된다.
 - 마이그레이션 job의 `DATABASE_URL`은 템플릿에 넣지 않는다(레포에 커밋되므로). Northflank에서
-  Managed Postgres secret group을 job에 연결한다.
+  Managed Postgres secret group을 job에 연결한다. **UI에서 job에 직접 env 변수를 넣지 말 것** —
+  `ManualJob` 노드가 `updateMode: "put"`(전체 교체) + `"runtimeEnvironment": {}` 이라 다음 템플릿
+  실행 때 지워진다. secret group 연결은 job spec 밖의 링크라 유지된다.
 - api 서비스: **자동 배포(auto-deploy)를 끈다.** 켜져 있으면 마이그레이션 완료 전에 새 이미지가
   먼저 뜰 수 있다. 배포는 템플릿의 `DeploymentService` 노드만 트리거한다.
 - GHCR 패키지는 public으로 둔다(레포가 공개이므로 이미지만 숨길 실익이 없다). 그래서 템플릿에
   registry credentials를 넣지 않는다. private으로 바꾸면 각 external 이미지에 `credentials`를 추가해야 한다.
-- `billing.deploymentPlan`은 `nf-compute-20`으로 두었다 — 계정에 없는 플랜이면 템플릿 실행이 실패하므로
-  실제 플랜 ID로 맞춘다.
+- `options.concurrencyPolicy`는 `queue`로 둔다. Northflank 기본값 `allow`면 릴리스가 겹칠 때
+  마이그레이션이 동시에 돌 수 있다(워크플로의 concurrency group은 UI에서 수동 실행한 run을 막지 못한다).
+- `billing.deploymentPlan`은 `nf-compute-20`(계정에서 사용 가능 확인됨). 더 작은 건 `nf-compute-10`
+  뿐인데 Node + Prisma CLI가 뜨는 job이라 RAM이 빠듯할 수 있어 내리지 않는다. 플랜 목록은:
+
+  ```bash
+  # /v1/plans 는 인증 없이 열려 있다 — 여기서 200이 나와도 API 토큰 검증과는 무관하다.
+  curl -sS https://api.northflank.com/v1/plans \
+    | jq -r '.data.plans[] | "\(.id)\t\(.cpuResource)vCPU\t\(.ramResource)MB"'
+  ```
 
 **GitHub 설정** — `production` environment(승인자 지정 권장)에 아래를 둔다.
 
@@ -274,10 +284,16 @@ release → POST /v1/templates/{id}/runs 로 템플릿 실행 + 결과까지 폴
 | secret   | `NORTHFLANK_API_TOKEN`   | Northflank API 토큰 |
 | variable | `NORTHFLANK_TEMPLATE_ID` | 템플릿 ID           |
 
-**템플릿 스키마 주의** — `https://api.northflank.com/v1/schemas/template`으로 검증할 수 있으나,
-최상위가 `additionalProperties: false`에 `apiVersion`/`arguments`/`spec`만 허용하므로 `$schema` 키를
-파일에 넣을 수 없다. 또 `Condition` 노드의 `runId`는 oneOf 브랜치가 "제약 없는 string"과 "`${...}` 패턴"
-두 개라 어떤 참조값이든 둘 다 매치돼 strict 검증에서 실패한다(Northflank 스키마 쪽 문제, 실행에는 무관).
+**파일 소유권은 Northflank에 있다** — GitOps 동기화가 양방향이라 템플릿을 UI에서 저장하면
+`northflank-cloud-build-run[bot]`이 이 파일을 직접 커밋한다. 봇은 `$schema`·`options`·`gitops`
+블록과 노드 기본값(`updateMode`, `buildConfiguration`, `runtimeEnvironment`, `buildArguments`)을
+채워 넣고 파일 끝 개행 없이 쓴다. pre-commit의 `*.json` prettier와 왕복 churn이 나므로
+[.prettierignore](../.prettierignore)에서 제외했다 — `pnpm format`을 돌려도 이 파일은 건드리지 않는다.
+
+**스키마 검증 주의** — `https://api.northflank.com/v1/schemas/template`으로 IDE 검증이 되지만
+스키마 자체에 결함이 있다. `Condition` 노드의 `runId`는 oneOf 브랜치가 "제약 없는 string"과
+"`${...}` 패턴" 둘이라 어떤 참조값이든 양쪽에 매치돼 strict 검증에서 실패한다(`anyOf`여야 맞다).
+Northflank 실제 검증은 통과하므로 이 경고는 무시한다.
 
 **마이그레이션 작성 제약** — `migrate deploy`는 롤백하지 않는다. 컬럼 DROP·NOT NULL 추가 등
 파괴적 변경은 expand/contract로 나눠 별도 릴리스에 싣는다. 이미 적용된 마이그레이션 파일을
