@@ -262,8 +262,14 @@ release → POST /v1/templates/{id}/runs 로 템플릿 실행 + 결과까지 폴
   Managed Postgres secret group을 job에 연결한다. **UI에서 job에 직접 env 변수를 넣지 말 것** —
   `ManualJob` 노드가 `updateMode: "put"`(전체 교체) + `"runtimeEnvironment": {}` 이라 다음 템플릿
   실행 때 지워진다. secret group 연결은 job spec 밖의 링크라 유지된다.
-- api 서비스: **자동 배포(auto-deploy)를 끈다.** 켜져 있으면 마이그레이션 완료 전에 새 이미지가
-  먼저 뜰 수 있다. 배포는 템플릿의 `DeploymentService` 노드만 트리거한다.
+- api 서비스: 템플릿의 `DeploymentService` 노드는 `updateMode: "patch"` 라 **기존 서비스를 찾아
+  이미지만 교체한다 — 서비스를 만들지는 않는다.** 이름이 정확히 `tripic-api` 인 deployment service를
+  먼저 만들어 두어야 하고, 없으면 그 노드가 `Service not found` 로 실패한다.
+  포트 3000/HTTP, health probe `GET /health`, secret group `tripic-secrets` 연결,
+  그리고 **자동 배포(auto-deploy)는 끈다** — 켜져 있으면 마이그레이션 완료 전에 새 이미지가 뜰 수 있다.
+- 서비스 필수 환경변수는 [src/config/env.ts](../apps/api/src/config/env.ts) 의 zod 스키마가 부팅 시
+  강제한다: `DATABASE_URL`, `JWT_ACCESS_SECRET`(32자 이상), `KAKAO_APP_ID`(양의 정수).
+  나머지(`JWT_ACCESS_TTL_SEC`·`JWT_REFRESH_TTL_DAYS`·`PORT`)는 기본값이 있다.
 - GHCR 패키지는 public으로 둔다(레포가 공개이므로 이미지만 숨길 실익이 없다). 그래서 템플릿에
   registry credentials를 넣지 않는다. private으로 바꾸면 각 external 이미지에 `credentials`를 추가해야 한다.
 - `options.concurrencyPolicy`는 `queue`로 둔다. Northflank 기본값 `allow`면 릴리스가 겹칠 때

@@ -1,6 +1,6 @@
 {
   "name": "@tripic/api",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Tripic 비위치성 운영 API (NestJS) — health/app-config/notices/legal/version",
   "private": true,
   "license": "UNLICENSED",

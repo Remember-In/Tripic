@@ -77,7 +77,7 @@
           "ref": "apiService",
           "updateMode": "patch",
           "spec": {
-            "name": "tripic-api",
+            "name": "tripic",
             "deployment": {
               "external": {
                 "imagePath": "${args.apiImage}"
