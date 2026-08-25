@@ -78,6 +78,30 @@ jobs:
             printf '%-34s %-4s %s\n' "${label}" "${code}" "${msg}"
           }
 
+          # 토큰 값은 맞는데 전달 형식이 틀렸을 가능성을 배제한다.
+          # nf- 는 Northflank 가 붙인 식별 접두사라 JWT 본문이 아니다(디코드할 때 떼야 헤더가 나온다).
+          # 서버가 접두사 포함/제외 중 어느 쪽을 기대하는지 문서에 없으므로 직접 눌러본다.
+          echo "=== header variants (GET /v1/projects) ==="
+          variant() {
+            local label="$1"; shift
+            local code
+            code="$(curl -sS -o /tmp/nf-v.json -w '%{http_code}' "$@" "${API}/v1/projects" 2>/dev/null)" || code="curl-error"
+            printf '%-28s %-4s %s\n' "${label}" "${code}" "$(jq -r '.error.message // empty' /tmp/nf-v.json 2>/dev/null)"
+          }
+          variant "Bearer <token>"        -H "Authorization: Bearer ${TRIMMED}"
+          variant "Bearer <no nf- prefix>" -H "Authorization: Bearer ${TRIMMED#nf-}"
+          variant "raw (no Bearer)"       -H "Authorization: ${TRIMMED}"
+          variant "x-api-key"             -H "x-api-key: ${TRIMMED}"
+          echo
+
+          # 401 본문이 "Unauthorized" 한 줄뿐이라 응답 헤더에서 단서를 찾는다.
+          # www-authenticate / x-ratelimit-* 가 있으면 거부 사유를 좁힐 수 있다.
+          echo "=== response headers (GET /v1/projects) ==="
+          curl -sS -D - -o /dev/null -H "Authorization: Bearer ${TRIMMED}" "${API}/v1/projects" 2>/dev/null \
+            | tr -d '\r' \
+            | grep -iE '^(HTTP/|www-authenticate|x-ratelimit|x-request-id|retry-after|server):' || true
+          echo
+
           echo "=== account-scoped ==="
           probe "GET /v1/projects"          "${API}/v1/projects"
           probe "GET /v1/templates"         "${API}/v1/templates"
