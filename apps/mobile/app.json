@@ -6,16 +6,54 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
-    "plugins": ["expo-router", "expo-sqlite"],
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-secure-store",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraMavenRepos": [
+              "https://devrepo.kakao.com/nexus/content/groups/public/"
+            ]
+          }
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Tripic은 선택한 여행 사진의 촬영일시와 위치정보를 확인해 방문 기록 작성을 도와요.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     },
     "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.tripic.app"
+      "supportsTablet": false,
+      "bundleIdentifier": "com.tripic.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.tripic.app"
-    }
+      "package": "com.tripic.app",
+      "blockedPermissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1df0e94d-daec-4122-ae8c-531b391f636a"
+      }
+    },
+    "owner": "tripic-team"
   }
 }
