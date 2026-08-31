@@ -17,8 +17,15 @@
 | [08-privacy-risk.md](./08-privacy-risk.md)             | 성능/UX · 개인정보/위치정보 정책 · 리스크           | 15~17       |
 | [09-release-principles.md](./09-release-principles.md) | 릴리스 계획 · 완료 기준 · 설계 원칙 · 기술 의사결정 | 18~21       |
 
+## 배포 정책 문서
+
+- [개인정보 처리방침 초안](./legal/privacy-policy.ko.md)
+- [서비스 이용약관 초안](./legal/terms-of-service.ko.md)
+- [위치기반서비스 이용약관 초안](./legal/location-based-service-terms.ko.md)
+- [배포 전 정책·개인정보 체크리스트](./legal/release-legal-checklist.md)
+
 ## 핵심 제약 (전 문서 공통)
 
 - 한국관광공사 OpenAPI는 **실시간 호출**하며, 원천 데이터를 로컬/서버 DB에 저장·캐싱 서빙하지 않는다.
-- 사용자 **GPS 좌표는 백엔드 서버로 전송하지 않는다** (앱 내부에서만 사용).
+- 사용자 **GPS 좌표는 Tripic 백엔드 서버나 로컬 DB에 저장하지 않는다**. 위치 기반 후보 검색을 실행하면 앱에서 한국관광공사 OpenAPI로 직접 전송한다.
 - **P0에서는 서버 DB/ORM을 사용하지 않는다.** NestJS 서버는 비위치성 운영 API에 한정한다.

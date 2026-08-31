@@ -9,7 +9,7 @@ flowchart TD
     subgraph Mobile["React Native + Expo App"]
         A["사진 선택"]
         B["EXIF 검사<br/>GPS / 촬영일시"]
-        C["GPS는 앱 내부에서만 사용"]
+        C["GPS는 앱에서 추출·임시 처리<br/>Tripic 서버·로컬 DB 저장 없음"]
         D["한국관광공사 OpenAPI 직접 호출<br/>위치 기반 관광정보 / 키워드 검색"]
         E["관광지 후보 목록 구성"]
         F["사용자 방문지 선택/확정"]
@@ -100,7 +100,7 @@ P0 서버가 하지 않는 일: GPS 좌표 수신, EXIF 포함 사진 수신, �
 ```txt
 travel-stamp/
   apps/
-    mobile/   # Expo Router 기반 (app/, src/features, src/lib/{kto,storage,query})
+    mobile/   # Expo Router 기반 (app/, src/{pages,widgets,features,entities,shared})
     api/      # NestJS (src/{health,app-config,notices,legal,version}, main.ts)
   packages/
     shared/   # types / constants / schemas
