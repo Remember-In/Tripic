@@ -1,10 +1,16 @@
 import type { ImagePickerAsset } from "expo-image-picker";
 
-import { isDateOnlyString } from "@/entities/travel-record";
-
 import type { DraftPhoto } from "./types";
 
 type ExifRecord = Record<string, unknown>;
+
+function isValidCalendarDate(value: string) {
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value
+  );
+}
 
 function asFiniteNumber(value: unknown) {
   if (typeof value === "number" && Number.isFinite(value)) {
@@ -36,10 +42,15 @@ function readCoordinate(
 }
 
 function signedCoordinate(value: number, reference: unknown) {
-  return reference === "S" || reference === "W" ? -Math.abs(value) : value;
+  const normalizedReference =
+    typeof reference === "string" ? reference.trim().toUpperCase() : reference;
+
+  return normalizedReference === "S" || normalizedReference === "W"
+    ? -Math.abs(value)
+    : value;
 }
 
-function extractGps(exif: ExifRecord) {
+export function extractGps(exif: ExifRecord) {
   const gpsBlock = {
     ...nestedExif(exif, "GPS"),
     ...nestedExif(exif, "{GPS}"),
@@ -51,34 +62,41 @@ function extractGps(exif: ExifRecord) {
     return undefined;
   }
 
-  return {
-    latitude: signedCoordinate(
-      latitude,
-      exif.GPSLatitudeRef ?? gpsBlock.GPSLatitudeRef ?? gpsBlock.LatitudeRef,
-    ),
-    longitude: signedCoordinate(
-      longitude,
-      exif.GPSLongitudeRef ?? gpsBlock.GPSLongitudeRef ?? gpsBlock.LongitudeRef,
-    ),
-  };
+  const signedLatitude = signedCoordinate(
+    latitude,
+    exif.GPSLatitudeRef ?? gpsBlock.GPSLatitudeRef ?? gpsBlock.LatitudeRef,
+  );
+  const signedLongitude = signedCoordinate(
+    longitude,
+    exif.GPSLongitudeRef ?? gpsBlock.GPSLongitudeRef ?? gpsBlock.LongitudeRef,
+  );
+
+  if (
+    signedLatitude < -90 ||
+    signedLatitude > 90 ||
+    signedLongitude < -180 ||
+    signedLongitude > 180
+  ) {
+    return undefined;
+  }
+
+  return { latitude: signedLatitude, longitude: signedLongitude };
 }
 
-function extractTakenDate(exif: ExifRecord) {
+export function extractTakenDate(exif: ExifRecord) {
   const raw = exif.DateTimeOriginal ?? exif.DateTimeDigitized ?? exif.DateTime;
   if (typeof raw !== "string") {
     return undefined;
   }
 
-  const match = raw.match(
-    /^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/,
-  );
+  const match = raw.match(/^(\d{4})[:-](\d{2})[:-](\d{2})(?:[ T]|$)/);
   if (!match) {
     return undefined;
   }
 
   const [, year, month, day] = match;
   const date = `${year}-${month}-${day}`;
-  return isDateOnlyString(date) ? date : undefined;
+  return isValidCalendarDate(date) ? date : undefined;
 }
 
 export function createDraftPhoto(asset: ImagePickerAsset): DraftPhoto {
@@ -86,10 +104,14 @@ export function createDraftPhoto(asset: ImagePickerAsset): DraftPhoto {
   const gps = extractGps(exif);
 
   return {
+    assetId: asset.assetId ?? undefined,
     gps,
     hasGps: Boolean(gps),
+    height: asset.height,
     id: `library:${asset.assetId ?? asset.uri}`,
     source: { uri: asset.uri },
     takenDate: extractTakenDate(exif),
+    uri: asset.uri,
+    width: asset.width,
   };
 }

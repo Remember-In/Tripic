@@ -10,6 +10,7 @@ import {
   type LocalRecordOwnerKey,
   type LocalRecordPhoto,
   type LocalRecordPhotoInput,
+  type LocalRecordStats,
   type LocalRecordVisit,
   type LocalRecordVisitInput,
   type LocalRegionProgress,
@@ -85,6 +86,18 @@ type RegionProgressRow = {
   visit_count: number;
 };
 
+type RecordStatsRow = {
+  photo_count: number;
+  record_count: number;
+  visited_area_count: number;
+  visited_place_count: number;
+  visited_sigungu_count: number;
+};
+
+type PhotoCleanupRow = {
+  local_uri: string;
+};
+
 type NormalizedPhotoInput = {
   id: string;
   localAssetId: string | null;
@@ -120,6 +133,10 @@ type NormalizedRecordInput = {
 
 export interface LocalTravelRecordRepository {
   clearRecords(ownerKey: LocalRecordOwnerKey): Promise<number>;
+  completePhotoCleanup(
+    ownerKey: LocalRecordOwnerKey,
+    localUris: readonly string[],
+  ): Promise<void>;
   createRecord(input: CreateLocalTravelRecordInput): Promise<LocalTravelRecord>;
   deleteRecord(
     ownerKey: LocalRecordOwnerKey,
@@ -133,9 +150,17 @@ export interface LocalTravelRecordRepository {
     ownerKey: LocalRecordOwnerKey,
     scope?: LocalRegionProgressScope,
   ): Promise<readonly LocalRegionProgress[]>;
+  getStats(ownerKey: LocalRecordOwnerKey): Promise<LocalRecordStats>;
   listRecords(
     ownerKey: LocalRecordOwnerKey,
   ): Promise<readonly LocalTravelRecordSummary[]>;
+  listPendingPhotoCleanup(
+    ownerKey: LocalRecordOwnerKey,
+  ): Promise<readonly string[]>;
+  stagePhotoCleanup(
+    ownerKey: LocalRecordOwnerKey,
+    localUris: readonly string[],
+  ): Promise<void>;
   updateRecord(
     ownerKey: LocalRecordOwnerKey,
     input: UpdateLocalTravelRecordInput,
@@ -381,6 +406,39 @@ function mapRecordRow(
   };
 }
 
+function mapNewRecord(
+  record: NormalizedRecordInput,
+  ownerKey: LocalRecordOwnerKey,
+  timestamp: string,
+): LocalTravelRecord {
+  return {
+    createdAt: timestamp,
+    days: record.days.map((day) => ({
+      date: day.date,
+      id: day.id,
+      note: day.note,
+      photos: day.photos.map((photo) => ({
+        id: photo.id,
+        localAssetId: photo.localAssetId,
+        localUri: photo.localUri,
+      })),
+      visits: day.visits.map((visit) => ({
+        ...visit,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        userConfirmed: true,
+      })),
+    })),
+    id: record.id,
+    ownerKey,
+    style: record.style,
+    tags: record.tags,
+    theme: record.theme,
+    title: record.title,
+    updatedAt: timestamp,
+  };
+}
+
 async function insertRecordChildren(
   database: TripicDatabase,
   record: NormalizedRecordInput,
@@ -444,6 +502,39 @@ async function insertRecordChildren(
         timestamp,
       );
     }
+  }
+}
+
+async function queuePhotoCleanup(
+  database: TripicDatabase,
+  ownerKey: LocalRecordOwnerKey,
+  localUris: readonly string[],
+  timestamp: string,
+) {
+  for (const localUri of new Set(localUris.filter(Boolean))) {
+    await database.runAsync(
+      `INSERT INTO local_photo_cleanup_queue
+         (local_uri, owner_key, queued_at)
+       VALUES (?, ?, ?)
+       ON CONFLICT(local_uri) DO UPDATE SET
+         owner_key = excluded.owner_key,
+         queued_at = excluded.queued_at;`,
+      localUri,
+      ownerKey,
+      timestamp,
+    );
+  }
+}
+
+async function cancelPhotoCleanup(
+  database: TripicDatabase,
+  localUris: readonly string[],
+) {
+  for (const localUri of new Set(localUris.filter(Boolean))) {
+    await database.runAsync(
+      "DELETE FROM local_photo_cleanup_queue WHERE local_uri = ?;",
+      localUri,
+    );
   }
 }
 
@@ -586,19 +677,17 @@ export class SqliteLocalTravelRecordRepository implements LocalTravelRecordRepos
           timestamp,
         );
         await insertRecordChildren(database, record, timestamp);
+        await cancelPhotoCleanup(
+          database,
+          record.days.flatMap((day) =>
+            day.photos.flatMap((photo) =>
+              photo.localUri ? [photo.localUri] : [],
+            ),
+          ),
+        );
       });
 
-      const createdRecord = await readRecord(
-        database,
-        input.ownerKey,
-        record.id,
-      );
-
-      if (!createdRecord) {
-        throw new LocalRecordNotFoundError(record.id);
-      }
-
-      return createdRecord;
+      return mapNewRecord(record, input.ownerKey, timestamp);
     });
   }
 
@@ -611,6 +700,7 @@ export class SqliteLocalTravelRecordRepository implements LocalTravelRecordRepos
       const record = normalizeRecordInput(input);
       const timestamp = normalizeIsoDateTime(this.now(), "현재 시각");
       const database = await this.provideDatabase();
+      let updatedRecord: LocalTravelRecord | null = null;
 
       await database.withTransactionAsync(async () => {
         const result = await database.runAsync(
@@ -642,6 +732,32 @@ export class SqliteLocalTravelRecordRepository implements LocalTravelRecordRepos
         const createdAtByVisitId = new Map(
           previousVisits.map((visit) => [visit.id, visit.created_at]),
         );
+        const previousPhotos = await database.getAllAsync<PhotoCleanupRow>(
+          `SELECT photo.local_uri
+           FROM local_record_photos AS photo
+           INNER JOIN local_record_days AS day ON day.id = photo.day_id
+           INNER JOIN local_records AS existing_record
+             ON existing_record.id = day.record_id
+           WHERE existing_record.id = ? AND existing_record.owner_key = ?
+             AND photo.local_uri IS NOT NULL;`,
+          record.id,
+          ownerKey,
+        );
+        const retainedLocalUris = new Set(
+          record.days.flatMap((day) =>
+            day.photos.flatMap((photo) =>
+              photo.localUri ? [photo.localUri] : [],
+            ),
+          ),
+        );
+        await queuePhotoCleanup(
+          database,
+          ownerKey,
+          previousPhotos
+            .map((photo) => photo.local_uri)
+            .filter((localUri) => !retainedLocalUris.has(localUri)),
+          timestamp,
+        );
 
         await database.runAsync(
           "DELETE FROM local_record_tags WHERE record_id = ?;",
@@ -657,9 +773,13 @@ export class SqliteLocalTravelRecordRepository implements LocalTravelRecordRepos
           timestamp,
           createdAtByVisitId,
         );
+
+        updatedRecord = await readRecord(database, ownerKey, record.id);
+        if (!updatedRecord) {
+          throw new LocalRecordNotFoundError(record.id);
+        }
       });
 
-      const updatedRecord = await readRecord(database, ownerKey, record.id);
       if (!updatedRecord) {
         throw new LocalRecordNotFoundError(record.id);
       }
@@ -762,6 +882,65 @@ export class SqliteLocalTravelRecordRepository implements LocalTravelRecordRepos
     });
   }
 
+  listPendingPhotoCleanup(
+    ownerKey: LocalRecordOwnerKey,
+  ): Promise<readonly string[]> {
+    return this.enqueue(async () => {
+      assertOwnerKey(ownerKey);
+      const database = await this.provideDatabase();
+      const rows = await database.getAllAsync<PhotoCleanupRow>(
+        `SELECT cleanup.local_uri
+         FROM local_photo_cleanup_queue AS cleanup
+         WHERE cleanup.owner_key = ?
+           AND NOT EXISTS (
+             SELECT 1
+             FROM local_record_photos AS photo
+             WHERE photo.local_uri = cleanup.local_uri
+           )
+         ORDER BY cleanup.queued_at ASC;`,
+        ownerKey,
+      );
+      return rows.map((row) => row.local_uri);
+    });
+  }
+
+  completePhotoCleanup(
+    ownerKey: LocalRecordOwnerKey,
+    localUris: readonly string[],
+  ): Promise<void> {
+    return this.enqueue(async () => {
+      assertOwnerKey(ownerKey);
+      if (localUris.length === 0) {
+        return;
+      }
+      const database = await this.provideDatabase();
+      await database.withTransactionAsync(async () => {
+        for (const localUri of new Set(localUris)) {
+          await database.runAsync(
+            `DELETE FROM local_photo_cleanup_queue
+             WHERE owner_key = ? AND local_uri = ?;`,
+            ownerKey,
+            localUri,
+          );
+        }
+      });
+    });
+  }
+
+  stagePhotoCleanup(
+    ownerKey: LocalRecordOwnerKey,
+    localUris: readonly string[],
+  ): Promise<void> {
+    return this.enqueue(async () => {
+      assertOwnerKey(ownerKey);
+      const database = await this.provideDatabase();
+      const timestamp = normalizeIsoDateTime(this.now(), "현재 시각");
+      await database.withTransactionAsync(async () => {
+        await queuePhotoCleanup(database, ownerKey, localUris, timestamp);
+      });
+    });
+  }
+
   getRegionProgress(
     ownerKey: LocalRecordOwnerKey,
     scope: LocalRegionProgressScope = "area",
@@ -806,6 +985,54 @@ export class SqliteLocalTravelRecordRepository implements LocalTravelRecordRepos
     });
   }
 
+  getStats(ownerKey: LocalRecordOwnerKey): Promise<LocalRecordStats> {
+    return this.enqueue(async () => {
+      assertOwnerKey(ownerKey);
+      const database = await this.provideDatabase();
+      const row = await database.getFirstAsync<RecordStatsRow>(
+        `SELECT
+           (SELECT COUNT(*) FROM local_records AS record
+            WHERE record.owner_key = ?) AS record_count,
+           (SELECT COUNT(*)
+            FROM local_record_photos AS photo
+            INNER JOIN local_record_days AS day ON day.id = photo.day_id
+            INNER JOIN local_records AS record ON record.id = day.record_id
+            WHERE record.owner_key = ?) AS photo_count,
+           (SELECT COUNT(DISTINCT visit.content_id)
+            FROM local_record_visits AS visit
+            INNER JOIN local_record_days AS day ON day.id = visit.day_id
+            INNER JOIN local_records AS record ON record.id = day.record_id
+            WHERE record.owner_key = ? AND visit.user_confirmed = 1)
+             AS visited_place_count,
+           (SELECT COUNT(DISTINCT visit.area_code)
+            FROM local_record_visits AS visit
+            INNER JOIN local_record_days AS day ON day.id = visit.day_id
+            INNER JOIN local_records AS record ON record.id = day.record_id
+            WHERE record.owner_key = ? AND visit.user_confirmed = 1)
+             AS visited_area_count,
+           (SELECT COUNT(DISTINCT visit.area_code || ':' || visit.sigungu_code)
+            FROM local_record_visits AS visit
+            INNER JOIN local_record_days AS day ON day.id = visit.day_id
+            INNER JOIN local_records AS record ON record.id = day.record_id
+            WHERE record.owner_key = ? AND visit.user_confirmed = 1
+              AND visit.sigungu_code IS NOT NULL) AS visited_sigungu_count;`,
+        ownerKey,
+        ownerKey,
+        ownerKey,
+        ownerKey,
+        ownerKey,
+      );
+
+      return {
+        photoCount: row?.photo_count ?? 0,
+        recordCount: row?.record_count ?? 0,
+        visitedAreaCount: row?.visited_area_count ?? 0,
+        visitedPlaceCount: row?.visited_place_count ?? 0,
+        visitedSigunguCount: row?.visited_sigungu_count ?? 0,
+      };
+    });
+  }
+
   deleteRecord(
     ownerKey: LocalRecordOwnerKey,
     recordId: string,
@@ -814,9 +1041,26 @@ export class SqliteLocalTravelRecordRepository implements LocalTravelRecordRepos
       assertOwnerKey(ownerKey);
       const normalizedRecordId = requireText(recordId, "recordId");
       const database = await this.provideDatabase();
+      const timestamp = normalizeIsoDateTime(this.now(), "현재 시각");
       let wasDeleted = false;
 
       await database.withTransactionAsync(async () => {
+        const photos = await database.getAllAsync<PhotoCleanupRow>(
+          `SELECT photo.local_uri
+           FROM local_record_photos AS photo
+           INNER JOIN local_record_days AS day ON day.id = photo.day_id
+           INNER JOIN local_records AS record ON record.id = day.record_id
+           WHERE record.id = ? AND record.owner_key = ?
+             AND photo.local_uri IS NOT NULL;`,
+          normalizedRecordId,
+          ownerKey,
+        );
+        await queuePhotoCleanup(
+          database,
+          ownerKey,
+          photos.map((photo) => photo.local_uri),
+          timestamp,
+        );
         const result = await database.runAsync(
           "DELETE FROM local_records WHERE id = ? AND owner_key = ?;",
           normalizedRecordId,
@@ -833,9 +1077,24 @@ export class SqliteLocalTravelRecordRepository implements LocalTravelRecordRepos
     return this.enqueue(async () => {
       assertOwnerKey(ownerKey);
       const database = await this.provideDatabase();
+      const timestamp = normalizeIsoDateTime(this.now(), "현재 시각");
       let deletedCount = 0;
 
       await database.withTransactionAsync(async () => {
+        const photos = await database.getAllAsync<PhotoCleanupRow>(
+          `SELECT photo.local_uri
+           FROM local_record_photos AS photo
+           INNER JOIN local_record_days AS day ON day.id = photo.day_id
+           INNER JOIN local_records AS record ON record.id = day.record_id
+           WHERE record.owner_key = ? AND photo.local_uri IS NOT NULL;`,
+          ownerKey,
+        );
+        await queuePhotoCleanup(
+          database,
+          ownerKey,
+          photos.map((photo) => photo.local_uri),
+          timestamp,
+        );
         const result = await database.runAsync(
           "DELETE FROM local_records WHERE owner_key = ?;",
           ownerKey,

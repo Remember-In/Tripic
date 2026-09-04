@@ -34,6 +34,7 @@ export type RecordEditorProps = {
   initialTitle?: string;
   onSubmit: (value: RecordEditorValue) => void;
   record: TravelRecord;
+  submitting?: boolean;
   submitLabel?: string;
   titlePlaceholder?: string;
 };
@@ -52,6 +53,7 @@ export function RecordEditor({
   initialTitle = record.title,
   onSubmit,
   submitLabel = "수정 완료",
+  submitting = false,
   titlePlaceholder = "이 기록의 제목을 입력해 주세요.",
 }: RecordEditorProps) {
   const [title, setTitle] = useState(initialTitle);
@@ -82,6 +84,10 @@ export function RecordEditor({
   };
 
   const submit = () => {
+    if (submitting) {
+      return;
+    }
+
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
       Alert.alert("여행 이름을 입력해 주세요");
@@ -206,7 +212,11 @@ export function RecordEditor({
       </ScrollView>
 
       <View style={styles.footer}>
-        <PrimaryButton label={submitLabel} onPress={submit} />
+        <PrimaryButton
+          label={submitLabel}
+          loading={submitting}
+          onPress={submit}
+        />
       </View>
     </KeyboardAvoidingView>
   );

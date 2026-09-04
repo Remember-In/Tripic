@@ -14,8 +14,12 @@ const aiSettingsRoute = "/records/new/ai-settings" as Href;
 
 export function PlaceConfirmationPage() {
   const router = useRouter();
-  const { photos, selectPhotoForInfo, visits } = useCreateRecordSession();
+  const { getPhotoDetails, photos, selectPhotoForInfo, visits } =
+    useCreateRecordSession();
   const [isEditing, setIsEditing] = useState(false);
+  const hasUnconfirmedPhoto = photos.some(
+    (photo) => !getPhotoDetails(photo.id).place,
+  );
 
   const handleBack = () => {
     if (isEditing) {
@@ -32,6 +36,15 @@ export function PlaceConfirmationPage() {
       return;
     }
 
+    const unconfirmedPhoto = photos.find(
+      (photo) => !getPhotoDetails(photo.id).place,
+    );
+    if (unconfirmedPhoto) {
+      selectPhotoForInfo(unconfirmedPhoto.id);
+      router.push(photoInfoRoute);
+      return;
+    }
+
     router.push(aiSettingsRoute);
   };
 
@@ -45,14 +58,10 @@ export function PlaceConfirmationPage() {
 
         <View style={styles.photoCard}>
           <PhotoStrip
-            onPhotoPress={
-              isEditing
-                ? (photo) => {
-                    selectPhotoForInfo(photo.id);
-                    router.push(photoInfoRoute);
-                  }
-                : undefined
-            }
+            onPhotoPress={(photo) => {
+              selectPhotoForInfo(photo.id);
+              router.push(photoInfoRoute);
+            }}
             photos={photos}
           />
         </View>
@@ -88,12 +97,23 @@ export function PlaceConfirmationPage() {
                   </AppText>
                 </View>
               ))}
+              {visits.length === 0 ? (
+                <AppText tone="placeholder" variant="subtitle04">
+                  사진의 방문 장소를 확인해 주세요.
+                </AppText>
+              ) : null}
             </View>
           </View>
         ) : null}
 
         <PrimaryButton
-          label={isEditing ? "수정 완료" : "다음"}
+          label={
+            isEditing
+              ? "수정 완료"
+              : hasUnconfirmedPhoto
+                ? "장소 확인하기"
+                : "다음"
+          }
           onPress={handleBottomButton}
           style={styles.bottomButton}
         />

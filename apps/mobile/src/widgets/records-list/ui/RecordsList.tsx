@@ -1,7 +1,6 @@
 import { Pressable, StyleSheet, View } from "react-native";
 
 import {
-  travelRecordSummaries,
   type RecordFilter,
   type TravelRecordSummary,
 } from "@/entities/travel-record";
@@ -13,7 +12,7 @@ export type RecordsListProps = {
   filter: RecordFilter;
   onFilterChange: (filter: RecordFilter) => void;
   onOpenRecord: (recordId: string) => void;
-  records?: readonly TravelRecordSummary[];
+  records: readonly TravelRecordSummary[];
 };
 
 const filters: readonly { label: string; value: RecordFilter }[] = [
@@ -25,7 +24,7 @@ export function RecordsList({
   filter,
   onFilterChange,
   onOpenRecord,
-  records = travelRecordSummaries,
+  records,
 }: RecordsListProps) {
   return (
     <View>

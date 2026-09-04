@@ -2,25 +2,24 @@ import { type Href, useRouter } from "expo-router";
 import { useMemo } from "react";
 import { Alert, StyleSheet, View } from "react-native";
 
-import {
-  gyeongjuTravelRecord,
-  type ItineraryDay,
-  type TravelRecord,
-} from "@/entities/travel-record";
+import { type ItineraryDay, type TravelRecord } from "@/entities/travel-record";
 import { DEFAULT_APP_CONFIG, useAppConfigQuery } from "@/entities/app-config";
 import {
   mapRecordTripThemeToRecordTheme,
   mapRecordVoiceThemeToDiaryStyle,
-  placeFixtures,
   type DraftPhoto,
   useCreateRecordSession,
 } from "@/features/create-record-session";
+import {
+  type SaveLocalRecordDraftPhotoInput,
+  useLocalRecordOwnerKey,
+  useSaveLocalRecordDraftMutation,
+} from "@/features/local-records";
 import { SettingsIcon } from "@/shared/assets/icons";
 import { spacing } from "@/shared/config/theme";
 import { PageHeader, Screen } from "@/shared/ui";
 import { RecordEditor, type RecordEditorValue } from "@/widgets/record-editor";
 
-const completedRecordRoute = "/records/draft" as Href;
 const recordSettingsRoute = "/records/new/ai-settings?returnTo=compose" as Href;
 
 const tripThemeLabels = {
@@ -59,24 +58,42 @@ function groupPhotosByDate(
 export function RecordComposePage() {
   const router = useRouter();
   const { data: appConfig = DEFAULT_APP_CONFIG } = useAppConfigQuery();
-  const { getPhotoDetails, photos, setCompletedRecord, tripTheme, voiceTheme } =
-    useCreateRecordSession();
+  const {
+    discardTransientGps,
+    finishDraft,
+    getPhotoDetails,
+    photos,
+    tripTheme,
+    voiceTheme,
+  } = useCreateRecordSession();
+  const saveRecordDraft = useSaveLocalRecordDraftMutation();
+  const ownerKey = useLocalRecordOwnerKey();
 
   const draftRecord = useMemo<TravelRecord>(() => {
     if (photos.length === 0) {
       return {
-        ...gyeongjuTravelRecord,
+        days: [],
         id: "draft",
+        place: {
+          address: "주소를 확인해 주세요",
+          category: tripThemeLabels[tripTheme],
+          id: "draft-place",
+          name: "방문 장소",
+          photo: { uri: "" },
+          region: "여행지",
+          stampApplied: false,
+          visitDate: "",
+        },
+        style: mapRecordVoiceThemeToDiaryStyle(voiceTheme),
         tags: [],
+        theme: mapRecordTripThemeToRecordTheme(tripTheme),
         title: "",
       };
     }
 
     const firstPhoto = photos[0];
     const firstDetails = getPhotoDetails(firstPhoto.id);
-    const place = placeFixtures.find(
-      (candidate) => candidate.name === firstDetails.place,
-    );
+    const place = firstDetails.place;
     const lastAddressPart = place?.address.split(" ").at(-1);
     const region = lastAddressPart?.replace(/(시|구|군)$/, "") ?? "여행지";
 
@@ -89,8 +106,8 @@ export function RecordComposePage() {
       place: {
         address: place?.address ?? "주소를 확인해 주세요",
         category: tripThemeLabels[tripTheme],
-        id: "draft-place",
-        name: firstDetails.place,
+        id: place?.contentId ?? "draft-place",
+        name: place?.name ?? "장소를 확인해 주세요",
         photo: firstPhoto.source,
         region,
         stampApplied: true,
@@ -103,28 +120,79 @@ export function RecordComposePage() {
     };
   }, [getPhotoDetails, photos, tripTheme, voiceTheme]);
 
-  const completeRecord = (value: RecordEditorValue) => {
+  const completeRecord = async (value: RecordEditorValue) => {
     if (photos.length === 0) {
       router.replace("/records/new/photos" as Href);
       return;
     }
 
-    setCompletedRecord({
-      ...draftRecord,
-      days: draftRecord.days.map((day) => ({
-        ...day,
-        note: value.notes[day.id],
-      })),
-      tags: value.tags,
-      title: value.title,
-    });
+    if (!ownerKey) {
+      Alert.alert(
+        "기록을 저장할 수 없어요",
+        "로그인 상태 확인이 끝난 뒤 다시 시도해 주세요.",
+      );
+      return;
+    }
 
-    Alert.alert("기록을 만들었어요", "여행 기록에서 바로 확인할 수 있어요.", [
-      {
-        onPress: () => router.replace(completedRecordRoute),
-        text: "확인",
-      },
-    ]);
+    if (saveRecordDraft.isPending) {
+      return;
+    }
+
+    const draftPhotos: SaveLocalRecordDraftPhotoInput[] = [];
+    for (const photo of photos) {
+      const details = getPhotoDetails(photo.id);
+      if (!details.place) {
+        Alert.alert(
+          "장소 확인이 필요해요",
+          "모든 사진의 방문 장소를 먼저 확인해 주세요.",
+          [
+            {
+              onPress: () => router.replace("/records/new/places" as Href),
+              text: "확인",
+            },
+          ],
+        );
+        return;
+      }
+
+      draftPhotos.push({
+        assetId: photo.assetId,
+        date: details.date,
+        dimensions: { height: photo.height, width: photo.width },
+        place: details.place,
+        sourceUri: photo.uri,
+      });
+    }
+
+    try {
+      discardTransientGps();
+      const savedRecord = await saveRecordDraft.mutateAsync({
+        notesByDate: Object.fromEntries(
+          draftPhotos.map(({ date }) => [
+            date,
+            value.notes[`draft-day-${date}`] ?? null,
+          ]),
+        ),
+        ownerKey,
+        photos: draftPhotos,
+        style: mapRecordVoiceThemeToDiaryStyle(voiceTheme),
+        tags: value.tags,
+        theme: mapRecordTripThemeToRecordTheme(tripTheme),
+        title: value.title,
+      });
+
+      finishDraft();
+      router.replace({
+        params: { recordId: savedRecord.id },
+        pathname: "/records/[recordId]",
+      });
+      Alert.alert("기록을 만들었어요", "여행 기록에서 바로 확인할 수 있어요.");
+    } catch (error) {
+      Alert.alert(
+        "기록을 저장하지 못했어요",
+        error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+      );
+    }
   };
 
   if (photos.length === 0) {
@@ -161,6 +229,7 @@ export function RecordComposePage() {
           initialTitle=""
           onSubmit={completeRecord}
           record={draftRecord}
+          submitting={saveRecordDraft.isPending}
           submitLabel="기록 완료"
         />
       </View>

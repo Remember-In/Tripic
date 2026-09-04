@@ -1,7 +1,7 @@
 import * as SQLite from "expo-sqlite";
 
 const DATABASE_NAME = "tripic.db";
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 
 let databasePromise: Promise<SQLite.SQLiteDatabase> | undefined;
 
@@ -110,6 +110,20 @@ const migrationV1 = `
   PRAGMA user_version = 1;
 `;
 
+const migrationV2 = `
+  CREATE TABLE IF NOT EXISTS local_photo_cleanup_queue (
+    local_uri TEXT PRIMARY KEY NOT NULL,
+    owner_key TEXT NOT NULL
+      CHECK (owner_key = 'guest' OR owner_key GLOB 'user:?*'),
+    queued_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS local_photo_cleanup_owner_idx
+    ON local_photo_cleanup_queue(owner_key, queued_at);
+
+  PRAGMA user_version = 2;
+`;
+
 /**
  * Tripic 로컬 저장소를 현재 스키마로 올린다.
  *
@@ -133,13 +147,17 @@ export async function migrateTripicDatabase(
     );
   }
 
-  if (currentVersion >= 1) {
-    return;
+  if (currentVersion < 1) {
+    await database.withTransactionAsync(async () => {
+      await database.execAsync(migrationV1);
+    });
   }
 
-  await database.withTransactionAsync(async () => {
-    await database.execAsync(migrationV1);
-  });
+  if (currentVersion < 2) {
+    await database.withTransactionAsync(async () => {
+      await database.execAsync(migrationV2);
+    });
+  }
 }
 
 async function createTripicDatabase(): Promise<SQLite.SQLiteDatabase> {

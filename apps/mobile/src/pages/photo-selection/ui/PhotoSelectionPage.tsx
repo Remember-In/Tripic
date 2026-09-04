@@ -21,10 +21,14 @@ const placesRoute = "/records/new/places" as Href;
 
 export function PhotoSelectionPage() {
   const router = useRouter();
-  const { addPhotosFromLibrary, photos, removePhoto } =
-    useCreateRecordSession();
+  const {
+    addPhotosFromLibrary,
+    decideLocationSearch,
+    locationSearchDecision,
+    photos,
+    removePhoto,
+  } = useCreateRecordSession();
   const [isPicking, setIsPicking] = useState(false);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   const openPhotoPicker = async () => {
     if (isPicking) {
@@ -62,16 +66,50 @@ export function PhotoSelectionPage() {
     }
   };
 
+  const openPlaceConfirmation = () => {
+    router.push(placesRoute);
+  };
+
   const goToPlaces = async () => {
     if (photos.length === 0) {
       await openPhotoPicker();
       return;
     }
 
-    setIsAnalyzing(true);
-    await new Promise((resolve) => setTimeout(resolve, 650));
-    router.push(placesRoute);
-    setIsAnalyzing(false);
+    const hasGpsPhoto = photos.some((photo) => photo.hasGps);
+
+    if (!hasGpsPhoto) {
+      decideLocationSearch("manual");
+      openPlaceConfirmation();
+      return;
+    }
+
+    if (locationSearchDecision !== "undecided") {
+      openPlaceConfirmation();
+      return;
+    }
+
+    Alert.alert(
+      "사진 위치로 주변 관광지를 찾을까요?",
+      "동의하면 사진의 GPS 좌표가 검색할 때만 한국관광공사 TourAPI로 전송돼요. Tripic 서버와 로컬 데이터베이스에는 저장하지 않아요.",
+      [
+        { style: "cancel", text: "취소" },
+        {
+          onPress: () => {
+            decideLocationSearch("manual");
+            openPlaceConfirmation();
+          },
+          text: "직접 검색",
+        },
+        {
+          onPress: () => {
+            decideLocationSearch("nearby");
+            openPlaceConfirmation();
+          },
+          text: "동의하고 찾기",
+        },
+      ],
+    );
   };
 
   return (
@@ -148,7 +186,7 @@ export function PhotoSelectionPage() {
         ) : (
           <PrimaryButton
             label="다음"
-            loading={isAnalyzing || isPicking}
+            loading={isPicking}
             onPress={goToPlaces}
             style={styles.bottomButton}
           />

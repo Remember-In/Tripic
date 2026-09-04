@@ -11,6 +11,11 @@ export type KtoListItem = {
   title: string;
 };
 
+export type KtoAreaSearchInput = {
+  areaCode?: string;
+  sigunguCode?: string;
+};
+
 export type KtoPlaceDetail = KtoListItem & {
   homepage?: string;
   overview?: string;

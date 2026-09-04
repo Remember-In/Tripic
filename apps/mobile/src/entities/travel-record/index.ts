@@ -1,8 +1,5 @@
 export {
-  getTravelRecord,
-  gyeongjuTravelRecord,
   recordTagOptions,
-  travelRecordSummaries,
   type ItineraryDay,
   type RecordFilter,
   type TravelRecord,
@@ -61,6 +58,7 @@ export {
   type LocalRecordOwnerKey,
   type LocalRecordPhoto,
   type LocalRecordPhotoInput,
+  type LocalRecordStats,
   type LocalRecordVisit,
   type LocalRecordVisitInput,
   type LocalRegionProgress,

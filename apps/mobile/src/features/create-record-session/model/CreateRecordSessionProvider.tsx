@@ -8,31 +8,36 @@ import {
   useState,
 } from "react";
 
-import type { TravelRecord } from "@/entities/travel-record";
+import type { TouristPlaceCandidate } from "@/entities/tourist-place";
 
-import { placeFixtures } from "./fixtures";
 import { createDraftPhoto } from "./photoMetadata";
 import type {
   DraftPhoto,
   DraftVisit,
+  LocationSearchDecision,
   RecordTripTheme,
   RecordVoiceTheme,
 } from "./types";
 
 type CreateRecordSessionValue = {
   addPhotosFromLibrary: (assets: ImagePickerAsset[]) => void;
-  completedRecord?: TravelRecord;
+  decideLocationSearch: (
+    decision: Exclude<LocationSearchDecision, "undecided">,
+  ) => void;
+  discardTransientGps: (photoId?: string) => void;
+  finishDraft: () => void;
   getPhotoDetails: (photoId: string) => PhotoDetails;
+  isDraftCommitted: boolean;
   photoDate: string;
-  photoPlace: string;
+  photoPlace?: TouristPlaceCandidate;
   photos: DraftPhoto[];
+  locationSearchDecision: LocationSearchDecision;
   removePhoto: (photoId: string) => void;
   resetDraft: () => void;
   selectPhotoForInfo: (photoId: string) => void;
   selectedPhoto?: DraftPhoto;
-  setCompletedRecord: (record: TravelRecord) => void;
   setPhotoDate: (date: string) => void;
-  setPhotoPlace: (place: string) => void;
+  setPhotoPlace: (place: TouristPlaceCandidate) => void;
   setTripTheme: (theme: RecordTripTheme) => void;
   setVoiceTheme: (theme: RecordVoiceTheme) => void;
   tripTheme: RecordTripTheme;
@@ -42,7 +47,7 @@ type CreateRecordSessionValue = {
 
 type PhotoDetails = {
   date: string;
-  place: string;
+  place?: TouristPlaceCandidate;
 };
 
 const today = new Date();
@@ -52,7 +57,6 @@ const fallbackPhotoDetails: PhotoDetails = {
     String(today.getMonth() + 1).padStart(2, "0"),
     String(today.getDate()).padStart(2, "0"),
   ].join("-"),
-  place: "경주월드",
 };
 
 function initialPhotoDetails(photo?: DraftPhoto): PhotoDetails {
@@ -70,31 +74,43 @@ export function CreateRecordSessionProvider({ children }: PropsWithChildren) {
   const [photoDetails, setPhotoDetails] = useState<
     Record<string, PhotoDetails>
   >({});
-  const [completedRecord, setCompletedRecord] = useState<TravelRecord>();
+  const [locationSearchDecision, setLocationSearchDecision] =
+    useState<LocationSearchDecision>("undecided");
+  const [isDraftCommitted, setIsDraftCommitted] = useState(false);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
   const [voiceTheme, setVoiceTheme] = useState<RecordVoiceTheme>("emotional");
   const [tripTheme, setTripTheme] = useState<RecordTripTheme>("nature");
 
-  const addPhotosFromLibrary = useCallback((assets: ImagePickerAsset[]) => {
-    const incomingPhotos = assets.map(createDraftPhoto);
-
-    setPhotoDetails((currentDetails) => {
-      const nextDetails = { ...currentDetails };
-      incomingPhotos.forEach((photo) => {
-        nextDetails[photo.id] ??= initialPhotoDetails(photo);
+  const addPhotosFromLibrary = useCallback(
+    (assets: ImagePickerAsset[]) => {
+      setIsDraftCommitted(false);
+      const incomingPhotos = assets.map(createDraftPhoto).map((photo) => {
+        if (locationSearchDecision !== "manual") {
+          return photo;
+        }
+        const { gps: _discardedGps, ...photoWithoutGps } = photo;
+        return { ...photoWithoutGps, hasGps: false };
       });
-      return nextDetails;
-    });
 
-    setPhotos((currentPhotos) => {
-      const currentIds = new Set(currentPhotos.map((photo) => photo.id));
-      const uniqueIncomingPhotos = incomingPhotos.filter(
-        (photo) => !currentIds.has(photo.id),
-      );
+      setPhotoDetails((currentDetails) => {
+        const nextDetails = { ...currentDetails };
+        incomingPhotos.forEach((photo) => {
+          nextDetails[photo.id] ??= initialPhotoDetails(photo);
+        });
+        return nextDetails;
+      });
 
-      return [...currentPhotos, ...uniqueIncomingPhotos].slice(0, 8);
-    });
-  }, []);
+      setPhotos((currentPhotos) => {
+        const currentIds = new Set(currentPhotos.map((photo) => photo.id));
+        const uniqueIncomingPhotos = incomingPhotos.filter(
+          (photo) => !currentIds.has(photo.id),
+        );
+
+        return [...currentPhotos, ...uniqueIncomingPhotos].slice(0, 8);
+      });
+    },
+    [locationSearchDecision],
+  );
 
   const removePhoto = useCallback((photoId: string) => {
     setPhotos((currentPhotos) =>
@@ -113,6 +129,29 @@ export function CreateRecordSessionProvider({ children }: PropsWithChildren) {
   const selectPhotoForInfo = useCallback((photoId: string) => {
     setSelectedPhotoId(photoId);
   }, []);
+
+  const discardTransientGps = useCallback((photoId?: string) => {
+    setPhotos((currentPhotos) =>
+      currentPhotos.map((currentPhoto) => {
+        if (photoId && currentPhoto.id !== photoId) {
+          return currentPhoto;
+        }
+
+        const { gps: _discardedGps, ...photo } = currentPhoto;
+        return { ...photo, hasGps: false };
+      }),
+    );
+  }, []);
+
+  const decideLocationSearch = useCallback(
+    (decision: Exclude<LocationSearchDecision, "undecided">) => {
+      setLocationSearchDecision(decision);
+      if (decision === "manual") {
+        discardTransientGps();
+      }
+    },
+    [discardTransientGps],
+  );
 
   const selectedPhoto =
     photos.find((photo) => photo.id === selectedPhotoId) ?? photos[0];
@@ -141,7 +180,7 @@ export function CreateRecordSessionProvider({ children }: PropsWithChildren) {
   );
 
   const setPhotoPlace = useCallback(
-    (place: string) => {
+    (place: TouristPlaceCandidate) => {
       if (!selectedPhoto) {
         return;
       }
@@ -171,21 +210,22 @@ export function CreateRecordSessionProvider({ children }: PropsWithChildren) {
 
     return photos.flatMap((photo) => {
       const details = photoDetails[photo.id] ?? initialPhotoDetails(photo);
-      const visitKey = `${details.date}:${details.place}`;
+      const place = details.place;
+      if (!place) {
+        return [];
+      }
+      const visitKey = `${details.date}:${place.contentId}`;
       if (seen.has(visitKey)) {
         return [];
       }
       seen.add(visitKey);
 
-      const place = placeFixtures.find(
-        (candidate) => candidate.name === details.place,
-      );
-
       return [
         {
           date: details.date.replaceAll("-", "."),
           id: `visit:${visitKey}`,
-          name: place ? `${place.address} ${place.name}` : details.place,
+          name: [place.address, place.name].filter(Boolean).join(" "),
+          place,
         },
       ];
     });
@@ -195,23 +235,38 @@ export function CreateRecordSessionProvider({ children }: PropsWithChildren) {
     setPhotos([]);
     setPhotoDetails({});
     setSelectedPhotoId(null);
+    setLocationSearchDecision("undecided");
     setVoiceTheme("emotional");
     setTripTheme("nature");
+    setIsDraftCommitted(false);
+  }, []);
+
+  const finishDraft = useCallback(() => {
+    setPhotos([]);
+    setPhotoDetails({});
+    setSelectedPhotoId(null);
+    setLocationSearchDecision("undecided");
+    setVoiceTheme("emotional");
+    setTripTheme("nature");
+    setIsDraftCommitted(true);
   }, []);
 
   const value = useMemo<CreateRecordSessionValue>(
     () => ({
       addPhotosFromLibrary,
-      completedRecord,
+      decideLocationSearch,
+      discardTransientGps,
+      finishDraft,
       getPhotoDetails,
+      isDraftCommitted,
       photoDate,
       photoPlace,
       photos,
+      locationSearchDecision,
       removePhoto,
       resetDraft,
       selectPhotoForInfo,
       selectedPhoto,
-      setCompletedRecord,
       setPhotoDate,
       setPhotoPlace,
       setTripTheme,
@@ -222,11 +277,15 @@ export function CreateRecordSessionProvider({ children }: PropsWithChildren) {
     }),
     [
       addPhotosFromLibrary,
-      completedRecord,
+      decideLocationSearch,
+      discardTransientGps,
+      finishDraft,
       getPhotoDetails,
+      isDraftCommitted,
       photoDate,
       photoPlace,
       photos,
+      locationSearchDecision,
       removePhoto,
       resetDraft,
       selectPhotoForInfo,

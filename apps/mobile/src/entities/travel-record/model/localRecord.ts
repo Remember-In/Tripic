@@ -119,6 +119,14 @@ export type LocalRegionProgress = {
 
 export type LocalRegionProgressScope = "area" | "sigungu";
 
+export type LocalRecordStats = {
+  photoCount: number;
+  recordCount: number;
+  visitedAreaCount: number;
+  visitedPlaceCount: number;
+  visitedSigunguCount: number;
+};
+
 export function createUserLocalRecordOwnerKey(
   userId: string,
 ): LocalRecordOwnerKey {

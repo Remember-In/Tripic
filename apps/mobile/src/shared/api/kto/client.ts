@@ -1,4 +1,10 @@
-import type { KtoArea, KtoImage, KtoListItem, KtoPlaceDetail } from "./types";
+import type {
+  KtoArea,
+  KtoAreaSearchInput,
+  KtoImage,
+  KtoListItem,
+  KtoPlaceDetail,
+} from "./types";
 
 const KTO_BASE_URL = "https://apis.data.go.kr/B551011/KorService2";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -107,7 +113,11 @@ function configuredServiceKey() {
   if (!key) {
     throw new KtoConfigurationError();
   }
-  return key;
+  try {
+    return decodeURIComponent(key);
+  } catch {
+    return key;
+  }
 }
 
 async function requestKto(
@@ -115,6 +125,10 @@ async function requestKto(
   params: Readonly<Record<string, number | string | undefined>>,
   options: KtoRequestOptions = {},
 ) {
+  if (options.signal?.aborted) {
+    throw new KtoApiError("ABORTED", "관광지 검색을 취소했습니다.");
+  }
+
   const controller = new AbortController();
   const forwardAbort = () => controller.abort();
   options.signal?.addEventListener("abort", forwardAbort, { once: true });
@@ -123,19 +137,19 @@ async function requestKto(
     options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
   );
 
-  const query = new URLSearchParams({
-    MobileApp: "Tripic",
-    MobileOS: "ETC",
-    _type: "json",
-    serviceKey: configuredServiceKey(),
-  });
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== "") {
-      query.set(key, String(value));
-    }
-  });
-
   try {
+    const query = new URLSearchParams({
+      MobileApp: "Tripic",
+      MobileOS: "ETC",
+      _type: "json",
+      serviceKey: configuredServiceKey(),
+    });
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== "") {
+        query.set(key, String(value));
+      }
+    });
+
     const response = await fetch(`${KTO_BASE_URL}/${endpoint}?${query}`, {
       headers: { Accept: "application/json" },
       signal: controller.signal,
@@ -228,6 +242,28 @@ export async function searchKtoPlaces(
     .slice(0, 5);
 }
 
+export async function fetchKtoPlacesByArea(
+  input: KtoAreaSearchInput = {},
+  options?: KtoRequestOptions,
+) {
+  const items = await requestKto(
+    "areaBasedList2",
+    {
+      areaCode: input.areaCode?.trim(),
+      arrange: "A",
+      numOfRows: 5,
+      pageNo: 1,
+      sigunguCode: input.sigunguCode?.trim(),
+    },
+    options,
+  );
+
+  return items
+    .map(parseListItem)
+    .filter((item): item is KtoListItem => Boolean(item))
+    .slice(0, 5);
+}
+
 export async function fetchKtoPlaceDetail(
   contentId: string,
   options?: KtoRequestOptions,
@@ -235,6 +271,9 @@ export async function fetchKtoPlaceDetail(
   const [rawItem] = await requestKto(
     "detailCommon2",
     {
+      addrinfoYN: "Y",
+      areacodeYN: "Y",
+      catcodeYN: "Y",
       contentId,
       defaultYN: "Y",
       firstImageYN: "Y",
