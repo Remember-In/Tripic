@@ -35,6 +35,10 @@
 Phase 1의 목적: 모바일이 안정된 계약으로 즉시 개발을 시작할 수 있게 한다.
 헥사고날 구조(apps/api/CLAUDE.md)라 adapter 교체 시 controller/service는 무변경이다.
 
+**구현 시 결정**: Phase 1(in-memory)을 건너뛰고 **바로 Prisma adapter로 간다**. records·entries
+테이블이 이미 마이그레이션돼 있어 in-memory 단계의 실익이 없고, 서버가 모바일보다 먼저 붙는
+상황이라 "계약만 먼저 열어둔다"는 목적도 사라졌다. Phase 3(record_places) 게이트는 그대로다.
+
 ## 3. 엔드포인트 명세
 
 | Method | Path                                      | 성공 | 설명                                                                               |
@@ -58,7 +62,7 @@ URL은 **일차(day) 기준**으로 통일한다 — 일기(entry)와 사진(pho
 지체 없는 물리 삭제**다 (PRD "삭제된 기록은 복구하지 않는다" 및 개인정보보호법의 지체 없는
 파기 원칙과 일치). 탈퇴는 `users` 행 삭제 → FK cascade 로 소셜 계정·토큰·기록·일기·사진까지
 일괄 파기된다 — [docs/10 §3](./10-auth-db-design.md). soft delete 는 사용하지 않는다
-(스키마의 `status`/`deletedAt` 은 구현 브랜치에서 제거). 백업본에는 보관 주기 동안 잔존할 수
+(스키마의 `status`/`deletedAt` 은 마이그레이션 `drop_soft_delete` 로 제거 완료). 백업본에는 보관 주기 동안 잔존할 수
 있음을 처리방침에 고지한다.
 
 ### POST /records — 기록 생성
