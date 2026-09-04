@@ -49,6 +49,12 @@ ENV NODE_ENV=production
 ENV PORT=3000
 WORKDIR /app
 
+# base image 태그는 node 버전 고정을 위해 유지하되, 그 안의 alpine 패키지는 최신 패치로 올린다.
+# 태그가 고정돼 있으면 base 가 재빌드돼도 갱신분을 못 받아 이미 패치된 OS CVE 를 계속 끌고 다닌다
+# (예: CVE-2026-14456 libcrypto3/libssl3 3.5.7-r0 → 3.5.8-r0). CI 의 Trivy 이미지 스캔은
+# "수정본이 있는 HIGH/CRITICAL" 을 차단하므로 여기서 미리 올려둔다.
+RUN apk upgrade --no-cache
+
 # 런타임은 node 바이너리만 쓴다(CMD 가 node 직접 실행). 이미지 내장 npm/corepack/yarn 은
 # 사용하지 않으면서 자체 의존성이 이미지 스캔에 잡히므로(npm 번들 brace-expansion 5.0.6 →
 # GHSA-mh99-v99m-4gvg 등) 제거해 공격 표면과 오탐을 함께 줄인다. COPY 앞에 두어 레이어를 캐싱한다.
