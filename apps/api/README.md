@@ -58,9 +58,9 @@ Prisma 7 규칙에 따라 datasource url은 `prisma.config.ts`에서 관리한�
 | POST   | `/auth/logout`  | Bearer | refresh family 전체 revoke          | ✅ 동작                                                  |
 | GET    | `/users/me`     | Bearer | 내 프로필                           | ✅ 동작                                                  |
 | PATCH  | `/users/me`     | Bearer | 닉네임 설정/변경 (온보딩)           | ✅ 동작                                                  |
-| GET    | `/app-config`   | 공개   | 앱 설정값 조회                      | ⏳ 스텁 (TODO)                                           |
-| GET    | `/notices`      | 공개   | 공지사항 조회                       | ⏳ 스텁 (TODO)                                           |
-| GET    | `/version`      | 공개   | 앱 최소 지원 버전 조회              | ⏳ 스텁 (TODO)                                           |
+| GET    | `/app-config`   | 공개   | 앱 설정값 조회                      | ✅ 동작                                                  |
+| GET    | `/notices`      | 공개   | 공지사항 조회                       | ✅ 동작                                                  |
+| GET    | `/version`      | 공개   | 앱 최소 지원 버전 조회              | ✅ 동작                                                  |
 | \*     | `/records...`   | Bearer | 여행 기록 콘텐츠 CRUD + 날짜별 일기 | 📝 설계 ([docs/11](../../docs/11-records-api-design.md)) |
 
 전역 guard 는 default-deny — `@Public()` 라우트만 인증 없이 접근 가능하다.
@@ -85,6 +85,7 @@ apps/api/
       jwt-auth.guard.ts  #   전역 default-deny guard (+@Public/@CurrentUser)
     users/               # 프로필 bounded context (ports/adapters 동일 구조)
     health/ app-config/ notices/ version/          # 비위치성 운영 API (@Public)
+      <module>.data.ts   #   DB 없이 서빙하는 정적 응답 상수 (docs/13 — 값 변경 = 재배포)
   test/
     global-setup.e2e.ts  # Testcontainers Postgres + prisma migrate deploy
     setup-env.e2e.ts     # 컨테이너 DATABASE_URL 주입

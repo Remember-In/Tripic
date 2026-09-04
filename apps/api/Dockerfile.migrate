@@ -18,17 +18,32 @@ FROM node:24.18.0-alpine3.24
 ENV NODE_ENV=production
 WORKDIR /app
 
+# apps/api/Dockerfile 의 runtime 스테이지와 같은 이유로 alpine 패키지를 최신 패치로 올린다
+# (고정된 base 태그가 이미 패치된 OS CVE 를 계속 끌고 다니는 것을 막는다).
+RUN apk upgrade --no-cache
+
 # devDependencies 에 선언된 prisma 레인지를 그대로 써서 CLI 만 설치한다.
 # Prisma 7 CLI 는 Rust 엔진이 없는 순수 JS 다.
-# 설치 직후 npm/corepack/yarn 을 제거한다(runtime 이미지와 동일한 이유 — 공격 표면·스캔 오탐 축소).
+# 설치 직후 pnpm/npm/corepack/yarn 을 제거한다(runtime 이미지와 동일한 이유 — 공격 표면·스캔 오탐 축소).
+#
+# 설치를 pnpm 으로 하는 이유: 레포 루트 package.json 의 pnpm.overrides 를 그대로 심어
+# advisory 패치 버전 강제를 여기서도 적용받는다. npm overrides 로 옮겨 적으면 버전이 이중 관리가
+# 되고, `name@range` 형태의 범위별 override(brace-expansion 등)를 표현할 수 없다.
+# (안 막으면 이 이미지만 mysql2·deepmerge-ts 취약 버전을 계속 끌고 다닌다 — prisma CLI 의 의존성)
+ENV PNPM_HOME=/pnpm
+ENV PATH="$PNPM_HOME:$PATH"
 COPY apps/api/package.json /tmp/api-package.json
-RUN PRISMA_RANGE="$(node -p "require('/tmp/api-package.json').devDependencies.prisma")" \
-    && node -p "JSON.stringify({name:'tripic-migrator',private:true,type:'commonjs'})" > package.json \
-    && npm install --no-audit --no-fund --omit=optional "prisma@${PRISMA_RANGE}" \
-    && rm -f /tmp/api-package.json \
-    && rm -rf /root/.npm \
+COPY package.json /tmp/root-package.json
+RUN corepack enable && corepack prepare pnpm@10.34.3 --activate \
+    && PRISMA_RANGE="$(node -p "require('/tmp/api-package.json').devDependencies.prisma")" \
+    && node -p "JSON.stringify({name:'tripic-migrator',private:true,type:'commonjs',pnpm:{overrides:require('/tmp/root-package.json').pnpm.overrides}})" > /tmp/pkg.json \
+    && mv /tmp/pkg.json package.json \
+    && pnpm add --prod --config.confirmModulesPurge=false "prisma@${PRISMA_RANGE}" \
+    && rm -f /tmp/api-package.json /tmp/root-package.json \
+    && rm -rf /pnpm /root/.cache /root/.npm \
        /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
        /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
+       /usr/local/bin/pnpm /usr/local/bin/pnpx \
        /opt/yarn-v* /usr/local/bin/yarn /usr/local/bin/yarnpkg \
     && chown -R node:node /app
 
