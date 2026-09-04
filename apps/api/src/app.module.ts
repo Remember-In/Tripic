@@ -4,6 +4,7 @@ import { validateEnv } from "@/config/env";
 import { PrismaModule } from "@/prisma/prisma.module";
 import { AuthModule } from "@/auth/auth.module";
 import { UsersModule } from "@/users/users.module";
+import { RecordsModule } from "@/records/records.module";
 import { HealthModule } from "@/health/health.module";
 import { AppConfigModule } from "@/app-config/app-config.module";
 import { NoticesModule } from "@/notices/notices.module";
@@ -22,6 +23,7 @@ import { VersionModule } from "@/version/version.module";
     PrismaModule,
     AuthModule,
     UsersModule,
+    RecordsModule,
     HealthModule,
     AppConfigModule,
     NoticesModule,
