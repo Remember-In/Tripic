@@ -1,10 +1,10 @@
 # 운영 API 응답 계약 (app-config · notices · version) + 법무 페이지 이관
 
-| 항목 | 내용                                                                     |
-| ---- | ------------------------------------------------------------------------ |
-| 상태 | 설계 — 현재 스텁(빈 응답)을 이 계약대로 채운다                           |
-| 근거 | PRD 14.2 (비위치성 운영 API), [06-architecture.md](./06-architecture.md) |
-| 원칙 | **DB 불필요** — 서버 코드 내 정적 JSON/상수로 서빙 (원격 갱신 = 재배포)  |
+| 항목 | 내용                                                                                |
+| ---- | ----------------------------------------------------------------------------------- |
+| 상태 | **구현 완료** — 3종 모두 이 계약대로 정적 서빙 중 (`src/<module>/<module>.data.ts`) |
+| 근거 | PRD 14.2 (비위치성 운영 API), [06-architecture.md](./06-architecture.md)            |
+| 원칙 | **DB 불필요** — 서버 코드 내 정적 JSON/상수로 서빙 (원격 갱신 = 재배포)             |
 
 ---
 
@@ -15,7 +15,7 @@
   이관한다.
 - 서버 제공은 version·app-config·notices **JSON 3종**. 약관/처리방침은 서버 미제공 —
   앱 번들로 표시하고, 심사용 공개 URL은 **외부 Notion 페이지**로 확보한다 (아래 참고).
-- 전부 `@Public()` (인증 불필요), 캐시 허용 (`Cache-Control: public, max-age=300` 권장).
+- 전부 `@Public()` (인증 불필요), 캐시 허용 (`Cache-Control: public, max-age=300` — 구현됨).
 - JSON 응답의 계약 타입은 `@tripic/shared`에 두어 앱과 공유한다.
 
 ## 2. 엔드포인트 명세
@@ -23,12 +23,15 @@
 ### GET /version — 앱 최소 지원 버전
 
 ```jsonc
-// 200
+// 200 — 현재 응답 (스토어 미등록이라 updateUrl 생략)
 {
   "minSupportedVersion": "1.0.0", // semver — 미만이면 앱이 강제 업데이트 안내
   "latestVersion": "1.0.0",
+}
+// 스토어 등록 후 추가할 필드
+{
   "updateUrl": {
-    "android": "https://play.google.com/store/apps/details?id=...", // 스토어 등록 후 확정
+    "android": "https://play.google.com/store/apps/details?id=...",
     "ios": "https://apps.apple.com/app/...",
   },
 }
@@ -48,10 +51,13 @@ PRD 6.4의 후보 조회 기준을 릴리스 없이 조정할 수 있게 원격�
   },
   "features": {
     "aiDiary": false, // AI 일기 생성 노출 여부 — 신고·필터 구현 전까지 false (docs/11 §3.2)
-    "photoUpload": true, // 사진 업로드 노출 여부 (docs/11 §3.1)
+    "photoUpload": false, // 사진 업로드 노출 여부 — 업로드 API 구현 전까지 false (docs/11 §3.1)
   },
 }
 ```
+
+기능 플래그는 **해당 서버 API 가 실제로 존재할 때** `true` 로 뒤집는다 — 없는 엔드포인트를 앱이
+노출하지 않게 막는 것이 이 스위치의 목적이므로 둘 다 `false` 로 출시한다.
 
 ### GET /notices — 공지 목록
 
@@ -95,9 +101,14 @@ PRD 6.4의 후보 조회 기준을 릴리스 없이 조정할 수 있게 원격�
 - 정적 서빙이라 3종 모두 실패 케이스가 사실상 없다 — 5xx는 서버 장애뿐.
 - 앱은 `/version` 실패 시 차단하지 않고 통과시킨다 (강제 업데이트는 성공 응답에서만 판단).
 
-## 4. 구현 메모 (구현 브랜치에서)
+## 4. 구현 메모
 
-- 헥사고날 적용은 과설계 — 컨트롤러가 상수 모듈(`src/<module>/<module>.data.ts`)을 직접 반환해도
-  된다 (외부 I/O가 없으므로 port 불필요, apps/api/CLAUDE.md 원칙과 상충하지 않음).
-- zod 스키마보다 **응답 타입**(`@tripic/shared`)이 계약의 본체다 (요청 본문이 없으므로).
-- 스토어 URL 등 미확정 값은 빈 문자열이 아니라 **필드 생략(optional)** 으로 둔다.
+- 헥사고날 적용은 과설계 — 컨트롤러가 상수 모듈(`src/<module>/<module>.data.ts`)을 직접 반환한다
+  (외부 I/O가 없으므로 port 불필요, apps/api/CLAUDE.md 원칙과 상충하지 않음).
+- zod 스키마보다 **응답 타입**(`@tripic/shared`의 `VersionInfo`·`AppConfig`·`Notice`)이 계약의
+  본체다 (요청 본문이 없으므로).
+- 스토어 URL 등 미확정 값은 빈 문자열이 아니라 **필드 생략(optional)** 으로 둔다 — 현재
+  `/version` 응답에 `updateUrl`이 없다.
+- `app-config`의 `kto` 기본값은 앱과 공유하는 상수(`DEFAULT_RADIUS_M`·`EXPANDED_RADIUS_M`·
+  `MAX_CANDIDATES`)를 그대로 쓴다 — 원격 조정이 필요하면 `app-config.data.ts` 값만 바꿔 재배포한다.
+- 공지 배열은 데이터 모듈에서 `publishedAt` 내림차순 정렬을 보장한다 (컨트롤러는 정렬하지 않음).

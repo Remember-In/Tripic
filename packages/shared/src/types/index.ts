@@ -5,6 +5,9 @@
  * - 이 타입들은 앱/서버가 공유하는 "계약(contract)"이다.
  * - 관광공사 OpenAPI 원천 데이터(관광지명/주소/소개/이미지 등)는 저장 대상이 아니므로
  *   여기서 모델링하지 않는다. (PRD 6.3 / 12.2 준수)
+ * - 하위 파일로 쪼개지 않는다: React Native 진입점(src/react-native.js)이 이 파일을
+ *   확장자 없이 번들하는데, Metro 는 NodeNext 용 `.js` specifier 를 .ts 원본으로
+ *   되돌려 찾지 못한다 (여기서 상대 re-export 를 하면 모바일 번들이 깨진다).
  */
 
 /** 방문지 매칭 방식 (PRD 6.5) */
@@ -72,4 +75,45 @@ export interface BadgeProgress {
   badgeKey: string;
   earned: boolean;
   earnedAt?: string;
+}
+
+/* ---------- 비위치성 운영 API 응답 계약 (docs/13-operations-api-design.md) ----------
+ * 서버는 DB 없이 정적 상수로 서빙하고 값 변경은 재배포로 처리한다.
+ * 요청 본문이 없으므로 zod 스키마가 아닌 **응답 타입**이 계약의 본체다. */
+
+/** GET /version — 앱 최소 지원 버전 */
+export interface VersionInfo {
+  /** semver — 미만이면 앱이 강제 업데이트를 안내한다 */
+  minSupportedVersion: string;
+  latestVersion: string;
+  /** 스토어 등록 전까지는 필드 자체를 생략한다 (빈 문자열 금지) */
+  updateUrl?: {
+    android?: string;
+    ios?: string;
+  };
+}
+
+/** GET /app-config — 앱 동작 설정 (비위치성, PRD 6.4) */
+export interface AppConfig {
+  /** 관광지 후보 조회 기준 — 릴리스 없이 조정 가능하게 원격화 */
+  kto: {
+    defaultRadiusM: number;
+    maxRadiusM: number;
+    maxCandidates: number;
+  };
+  /** 미구현/미승인 기능의 앱 노출 차단 스위치 */
+  features: {
+    aiDiary: boolean;
+    photoUpload: boolean;
+  };
+}
+
+/** GET /notices — 공지 (publishedAt 내림차순) */
+export interface Notice {
+  id: string;
+  title: string;
+  /** plain text 또는 markdown */
+  body: string;
+  /** ISO 8601 */
+  publishedAt: string;
 }
