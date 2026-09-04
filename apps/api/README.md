@@ -58,6 +58,7 @@ Prisma 7 규칙에 따라 datasource url은 `prisma.config.ts`에서 관리한�
 | POST   | `/auth/logout`  | Bearer | refresh family 전체 revoke          | ✅ 동작                                                  |
 | GET    | `/users/me`     | Bearer | 내 프로필                           | ✅ 동작                                                  |
 | PATCH  | `/users/me`     | Bearer | 닉네임 설정/변경 (온보딩)           | ✅ 동작                                                  |
+| DELETE | `/users/me`     | Bearer | 회원탈퇴 (즉시 파기, cascade)       | ✅ 동작                                                  |
 | GET    | `/app-config`   | 공개   | 앱 설정값 조회                      | ✅ 동작                                                  |
 | GET    | `/notices`      | 공개   | 공지사항 조회                       | ✅ 동작                                                  |
 | GET    | `/version`      | 공개   | 앱 최소 지원 버전 조회              | ✅ 동작                                                  |
@@ -91,6 +92,7 @@ apps/api/
     setup-env.e2e.ts     # 컨테이너 DATABASE_URL 주입
     app.e2e-spec.ts      # e2e (Vitest + PactumJS)
     auth.e2e-spec.ts     # 로그인/refresh rotation/logout e2e (카카오 port stub)
+    users.e2e-spec.ts    # 회원탈퇴 e2e (cascade 파기 후 401·재가입 확인)
   prisma/                # schema.prisma + migrations
   prisma.config.ts       # Prisma 7 datasource url 관리
   nest-cli.json          # builder: swc, typeCheck: true

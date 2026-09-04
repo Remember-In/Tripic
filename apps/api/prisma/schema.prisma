@@ -21,20 +21,15 @@ enum AuthProvider {
   KAKAO
 }
 
-enum UserStatus {
-  ACTIVE
-  DELETED
-}
-
+// 전면 hard delete 정책 (docs/10 §3, docs/11 §3): 탈퇴는 users 행 즉시 삭제 →
+// FK cascade 로 소셜 계정·토큰·기록·일기까지 일괄 파기된다. soft delete 용
+// status/deletedAt 컬럼은 두지 않는다.
 model User {
-  id        String     @id @default(uuid(7))
+  id        String   @id @default(uuid(7))
   // 가입 직후 null — 온보딩의 닉네임 설정 단계에서 채운다
   nickname  String?
-  status    UserStatus @default(ACTIVE)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  // soft delete: 회원탈퇴 시 즉시 파기 대신 상태 전환 (유예 후 배치 파기 정책은 P2에서 결정)
-  deletedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   socialAccounts SocialAccount[]
   refreshTokens  RefreshToken[]
@@ -112,7 +107,6 @@ model Record {
   hashtags  String[]     @default([])
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
-  deletedAt DateTime?
 
   entries RecordEntry[]
   places  RecordPlace[]
