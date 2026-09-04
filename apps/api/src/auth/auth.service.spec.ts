@@ -39,7 +39,6 @@ class FakeAuthAccounts implements AuthAccounts {
     const account: AuthAccount = {
       userId: `user-${++this.seq}`,
       nickname: null,
-      status: "ACTIVE",
     };
     this.accounts.set(kakaoUserId, account);
     return { account, isNewUser: true };
@@ -52,26 +51,24 @@ class FakeRefreshTokens implements RefreshTokens {
     StoredRefreshToken & { tokenHash: string; replaced: boolean }
   >();
   private seq = 0;
-  userStatusOf: (userId: string) => "ACTIVE" | "DELETED" = () => "ACTIVE";
 
   async findByHash(tokenHash: string) {
     for (const row of this.rows.values()) {
-      if (row.tokenHash === tokenHash) {
-        return { ...row, userStatus: this.userStatusOf(row.userId) };
-      }
+      if (row.tokenHash === tokenHash) return { ...row };
     }
     return null;
   }
 
   async issue(token: NewRefreshToken) {
     const id = `rt-${++this.seq}`;
-    this.rows.set(id, {
-      id,
-      ...token,
-      revoked: false,
-      replaced: false,
-      userStatus: "ACTIVE",
-    });
+    this.rows.set(id, { id, ...token, revoked: false, replaced: false });
+  }
+
+  /** 탈퇴 = users 행 삭제 → refresh_tokens 도 cascade 로 사라진다 */
+  deleteUserRows(userId: string) {
+    for (const [id, row] of this.rows) {
+      if (row.userId === userId) this.rows.delete(id);
+    }
   }
 
   async rotate(currentId: string, replacement: NewRefreshToken) {
@@ -127,12 +124,15 @@ describe("AuthService", () => {
       expect(again.isNewUser).toBe(false);
     });
 
-    it("탈퇴(soft delete) 계정이면 401", async () => {
-      const { account } = await accounts.findOrCreateByKakaoId("999");
-      account.status = "DELETED";
-      await expect(
-        service.loginWithKakao("kakao-token"),
-      ).rejects.toBeInstanceOf(UnauthorizedException);
+    it("탈퇴한 카카오 계정으로 다시 로그인하면 신규 가입으로 처리된다", async () => {
+      const first = await service.loginWithKakao("kakao-token");
+      // 탈퇴 = 계정 행 삭제 (hard delete)
+      accounts.accounts.delete("999");
+
+      const again = await service.loginWithKakao("kakao-token");
+
+      expect(again.isNewUser).toBe(true);
+      expect(again.user.id).not.toBe(first.user.id);
     });
   });
 
@@ -178,9 +178,10 @@ describe("AuthService", () => {
       );
     });
 
-    it("탈퇴 계정의 토큰이면 401 (docs/10 §3 규칙)", async () => {
+    it("탈퇴로 토큰 행이 사라졌으면 401 (docs/10 §3 — cascade 파기)", async () => {
       const login = await service.loginWithKakao("kakao-token");
-      tokens.userStatusOf = () => "DELETED";
+      const stored = await tokens.findByHash(sha256(login.refreshToken));
+      tokens.deleteUserRows(stored!.userId);
 
       await expect(service.refresh(login.refreshToken)).rejects.toBeInstanceOf(
         UnauthorizedException,

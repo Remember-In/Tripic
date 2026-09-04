@@ -1,11 +1,8 @@
 export const AUTH_ACCOUNTS = Symbol("AuthAccounts");
 
-export type AccountStatus = "ACTIVE" | "DELETED";
-
 export interface AuthAccount {
   userId: string;
   nickname: string | null;
-  status: AccountStatus;
 }
 
 /** 소셜 계정 ↔ 유저 조회/생성 outbound port */

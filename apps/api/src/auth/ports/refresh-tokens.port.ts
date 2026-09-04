@@ -1,5 +1,3 @@
-import type { AccountStatus } from "@/auth/ports/auth-accounts.port";
-
 export const REFRESH_TOKENS = Symbol("RefreshTokens");
 
 export interface StoredRefreshToken {
@@ -9,7 +7,6 @@ export interface StoredRefreshToken {
   /** revokedAt 또는 replacedById 가 설정됨 — 사용 불가 상태 */
   revoked: boolean;
   expiresAt: Date;
-  userStatus: AccountStatus;
 }
 
 export interface NewRefreshToken {
