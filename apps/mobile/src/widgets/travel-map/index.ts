@@ -1,1 +1,1 @@
-export { TravelMap } from "./TravelMap";
+export { TravelMap, type TravelMapProps } from "./TravelMap";

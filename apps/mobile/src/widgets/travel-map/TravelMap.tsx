@@ -1,135 +1,148 @@
-import { useCallback, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { useMemo } from "react";
+import { StyleSheet, View } from "react-native";
+import Svg, { Path, Text as SvgText } from "react-native-svg";
 
-import DaeguDetail from "@/shared/assets/home/daegu-detail.svg";
-import DaeguOverlay from "@/shared/assets/home/daegu-overlay.svg";
-import DaeguZoomOverlay from "@/shared/assets/home/daegu-zoom-overlay.svg";
-import SouthKorea from "@/shared/assets/home/south-korea.svg";
-import { radii, semanticColors, spacing } from "@/shared/config/theme";
+import {
+  KTO_REGIONS,
+  getRegionByAreaCode,
+  type KtoAreaCode,
+  type Region,
+} from "@/entities/region";
+import { palette, radii, semanticColors, spacing } from "@/shared/config/theme";
 import { AppText } from "@/shared/ui";
 
-const MAP_DEPTHS = [
-  "대한민국",
-  "경상북도",
-  "대구광역시",
-  "대구광역시 수성구",
-] as const;
+import {
+  KOREA_MAP_VIEW_BOX,
+  KOREA_SCHEMATIC_GEOMETRY,
+} from "./model/koreaSchematicGeometry";
 
-type MapDepth = (typeof MAP_DEPTHS)[number];
-
-type MapArtworkProps = {
-  depth: MapDepth;
+export type TravelMapProps = {
+  onSelectRegion?: (region: Region) => void;
+  selectedAreaCode?: KtoAreaCode | null;
+  visitedAreaCodes?: ReadonlySet<KtoAreaCode>;
+  /** @deprecated HomePage가 지역 데이터와 연결되는 동안만 지원한다. */
+  visitedAreaCount?: number;
 };
 
-function MapArtwork({ depth }: MapArtworkProps) {
-  if (depth === "대한민국") {
-    return (
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <SouthKorea style={styles.countryMap} />
-        <DaeguOverlay style={styles.countryDaegu} />
-      </View>
-    );
-  }
+const EMPTY_VISITED_AREA_CODES: ReadonlySet<KtoAreaCode> = new Set();
 
-  if (depth === "경상북도") {
-    return (
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <SouthKorea style={styles.gyeongbukMap} />
-        <DaeguZoomOverlay style={styles.gyeongbukDaegu} />
-      </View>
-    );
-  }
+export function TravelMap({
+  onSelectRegion,
+  selectedAreaCode,
+  visitedAreaCodes = EMPTY_VISITED_AREA_CODES,
+  visitedAreaCount,
+}: TravelMapProps) {
+  const selectedRegion = selectedAreaCode
+    ? getRegionByAreaCode(selectedAreaCode)
+    : undefined;
+  const visibleVisitedAreaCount = visitedAreaCount ?? visitedAreaCodes.size;
+
+  const regionStates = useMemo(
+    () =>
+      KOREA_SCHEMATIC_GEOMETRY.map((geometry) => {
+        const region = getRegionByAreaCode(geometry.areaCode);
+
+        if (!region) {
+          return null;
+        }
+
+        return {
+          geometry,
+          isSelected: selectedAreaCode === geometry.areaCode,
+          isVisited: visitedAreaCodes.has(geometry.areaCode),
+          region,
+        };
+      }).filter((state) => state !== null),
+    [selectedAreaCode, visitedAreaCodes],
+  );
 
   return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <DaeguDetail style={styles.daeguMap} />
+    <View
+      accessibilityLabel={`대한민국 여행 지도. 방문한 시·도 ${visibleVisitedAreaCount}곳, 전체 ${KTO_REGIONS.length}곳`}
+      style={styles.card}
+      testID="travel-map"
+    >
+      <Svg
+        accessibilityLabel="대한민국 17개 시·도 방문 지도"
+        height="100%"
+        preserveAspectRatio="xMidYMid meet"
+        testID="travel-map-svg"
+        viewBox={KOREA_MAP_VIEW_BOX}
+        width="100%"
+      >
+        {regionStates.map(({ geometry, isSelected, isVisited, region }) => {
+          const fill = isVisited
+            ? semanticColors.brand.primary
+            : palette.gray[100];
+          const stroke = isSelected
+            ? semanticColors.brand.secondary
+            : palette.gray.white;
+
+          return (
+            <Path
+              accessibilityLabel={`${region.name}, ${isVisited ? "방문" : "미방문"}${isSelected ? ", 선택됨" : ""}`}
+              accessible
+              d={geometry.path}
+              fill={fill}
+              key={region.id}
+              onPress={
+                onSelectRegion ? () => onSelectRegion(region) : undefined
+              }
+              stroke={stroke}
+              strokeLinejoin="round"
+              strokeWidth={isSelected ? 4 : 2}
+              testID={`travel-map-region-${region.id}`}
+            />
+          );
+        })}
+
+        {regionStates.map(({ geometry, isVisited, region }) => (
+          <SvgText
+            fill={isVisited ? palette.gray[900] : palette.gray[600]}
+            fontSize={9}
+            fontWeight="600"
+            key={`${region.id}-label`}
+            pointerEvents="none"
+            textAnchor="middle"
+            x={geometry.labelX}
+            y={geometry.labelY}
+          >
+            {region.shortName}
+          </SvgText>
+        ))}
+      </Svg>
+
+      <View pointerEvents="none" style={styles.caption}>
+        <AppText
+          testID="travel-map-label"
+          tone="placeholder"
+          variant="caption02"
+        >
+          {selectedRegion
+            ? `${selectedRegion.name} · ${visitedAreaCodes.has(selectedRegion.areaCode) ? "방문" : "미방문"}`
+            : `방문한 시·도 ${visibleVisitedAreaCount}/${KTO_REGIONS.length}`}
+        </AppText>
+      </View>
     </View>
   );
 }
 
-type TravelMapProps = {
-  visitedAreaCount: number;
-};
-
-export function TravelMap({ visitedAreaCount }: TravelMapProps) {
-  const [depthIndex, setDepthIndex] = useState(0);
-  const depth = MAP_DEPTHS[depthIndex];
-
-  const showNextDepth = useCallback(() => {
-    setDepthIndex((currentDepth) => (currentDepth + 1) % MAP_DEPTHS.length);
-  }, []);
-
-  return (
-    <Pressable
-      accessibilityHint="탭할 때마다 경상북도, 대구광역시, 수성구 순서로 지도를 확대합니다."
-      accessibilityLabel={`${depth} 여행 지도. 방문한 시·군 ${visitedAreaCount}곳`}
-      accessibilityRole="button"
-      onPress={showNextDepth}
-      style={styles.card}
-      testID="travel-map"
-    >
-      <MapArtwork depth={depth} />
-      <AppText
-        style={styles.mapLabel}
-        testID="travel-map-label"
-        tone="placeholder"
-        variant="subtitle03"
-      >
-        {depth}
-      </AppText>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
+  caption: {
+    bottom: spacing.md,
+    position: "absolute",
+    right: spacing.lg,
+  },
   card: {
     aspectRatio: 358 / 483,
     backgroundColor: semanticColors.background.surface,
     borderRadius: radii.large,
     maxWidth: 358,
     overflow: "hidden",
+    paddingBottom: 38,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
     position: "relative",
     width: "100%",
-  },
-  countryMap: {
-    height: "72.06%",
-    left: "4.19%",
-    position: "absolute",
-    top: "12.42%",
-    width: "91.62%",
-  },
-  countryDaegu: {
-    height: "3.33%",
-    left: "64.11%",
-    position: "absolute",
-    top: "44.41%",
-    width: "3.67%",
-  },
-  gyeongbukMap: {
-    height: "170.05%",
-    left: "-88.27%",
-    position: "absolute",
-    top: "-33.54%",
-    width: "216.2%",
-  },
-  gyeongbukDaegu: {
-    height: "12.22%",
-    left: "48.04%",
-    position: "absolute",
-    top: "36.44%",
-    width: "13.41%",
-  },
-  daeguMap: {
-    height: "63.89%",
-    left: "15.08%",
-    position: "absolute",
-    top: "13.66%",
-    width: "70.11%",
-  },
-  mapLabel: {
-    bottom: spacing.lg,
-    position: "absolute",
-    right: spacing.lg,
-    textAlign: "right",
   },
 });
