@@ -10,6 +10,7 @@ export default tseslint.config(
       "**/build/**",
       "**/node_modules/**",
       "**/coverage/**",
+      "**/src/generated/**",
       "apps/mobile/.expo/**",
     ],
   },

@@ -1,5 +1,16 @@
 name: Server Publish
 
+# v* 태그 하나로 릴리스 전체가 진행된다:
+#   publish → api / migrator 이미지를 GHCR 에 push (태그가 아닌 digest 로 고정)
+#   release → Northflank 템플릿(apps/api/northflank.json)을 실행하고 결과까지 대기
+#
+# 마이그레이션 → 배포 순서는 GitHub 이 아니라 템플릿 안에서 보장된다:
+#   ManualJob → JobRun → Condition(JobRun success) → DeploymentService(patch)
+# Condition 이 실패하면 DeploymentService 노드가 실행되지 않아 구 버전 앱이 그대로 서비스된다.
+#
+# 필수 전제: Northflank api 서비스의 자동 배포(auto-deploy)를 꺼둘 것 — 켜져 있으면
+# 마이그레이션 완료 전에 새 이미지가 먼저 뜰 수 있다. 자세한 설정은 docs/10-auth-db-design.md §8.
+
 on:
   push:
     tags:
@@ -9,9 +20,17 @@ env:
   REGISTRY: ghcr.io
   # ghcr.io/<owner>/tripic-api (metadata-action 이 소문자로 정규화)
   IMAGE_NAME: ${{ github.repository }}-api
+  # ghcr.io/<owner>/tripic-migrator — prisma CLI + migrations 만 담은 일회성 이미지
+  MIGRATOR_IMAGE_NAME: ${{ github.repository }}-migrator
+  NORTHFLANK_API: https://api.northflank.com
 
 permissions:
   contents: read
+
+# 릴리스가 겹치면 마이그레이션이 동시에 돌 수 있으므로 직렬화한다.
+concurrency:
+  group: server-publish
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -23,6 +42,14 @@ jobs:
       packages: write
       id-token: write # OIDC for SLSA provenance
       attestations: write
+    outputs:
+      # 버전 태그(0.0.5)로 넘긴다 — Northflank UI 에서 어느 릴리스가 떠 있는지 바로 보인다.
+      # 대신 태그는 덮어쓸 수 있으므로, 같은 버전을 다시 태그하지 않는 것이 전제다
+      # (Verify tag matches package version 스텝이 package.json 상향을 강제한다).
+      # 추적용 digest 는 Resolve image references 스텝 로그에 남긴다.
+      api-image: ${{ steps.images.outputs.api }}
+      migrator-image: ${{ steps.images.outputs.migrator }}
+      version: ${{ steps.meta.outputs.version }}
     steps:
       - name: Checkout
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -57,14 +84,26 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=sha,prefix=
 
+      - name: Extract metadata for migrator (tags, labels)
+        id: meta-migrator
+        uses: docker/metadata-action@80c7e94dd9b9319bd5eb7a0e0fe9291e23a2a2e9 # v6.1.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.MIGRATOR_IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix=
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
       - name: Build and push api Docker image
+        id: build-api
         uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
           file: apps/api/Dockerfile
+          target: runtime
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -75,3 +114,131 @@ jobs:
           build-args: |
             APP_VERSION=${{ steps.meta.outputs.version }}
             COMMIT_SHA=${{ github.sha }}
+
+      - name: Build and push migrator Docker image
+        id: build-migrator
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          file: apps/api/Dockerfile.migrate
+          push: true
+          tags: ${{ steps.meta-migrator.outputs.tags }}
+          labels: ${{ steps.meta-migrator.outputs.labels }}
+          provenance: mode=max
+          sbom: true
+          build-args: |
+            APP_VERSION=${{ steps.meta.outputs.version }}
+            COMMIT_SHA=${{ github.sha }}
+
+      - name: Resolve image references
+        id: images
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          API_DIGEST: ${{ steps.build-api.outputs.digest }}
+          MIGRATOR_DIGEST: ${{ steps.build-migrator.outputs.digest }}
+        run: |
+          set -euo pipefail
+          # GHCR 경로는 소문자만 허용 — metadata-action 과 동일하게 정규화한다.
+          REPO="$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          {
+            echo "api=${REGISTRY}/${REPO}-api:${VERSION}"
+            echo "migrator=${REGISTRY}/${REPO}-migrator:${VERSION}"
+          } >> "$GITHUB_OUTPUT"
+
+          # 배포는 읽기 쉬운 버전 태그로 하되, 어떤 이미지였는지 추적할 수 있게 digest 도 남긴다.
+          echo "api      ${REGISTRY}/${REPO}-api:${VERSION}       (${API_DIGEST})"
+          echo "migrator ${REGISTRY}/${REPO}-migrator:${VERSION}  (${MIGRATOR_DIGEST})"
+
+  release:
+    name: Migrate and deploy (Northflank template)
+    runs-on: ubuntu-latest
+    needs: [publish]
+    timeout-minutes: 25
+    # environment 보호 규칙으로 승인자·시크릿 스코프를 건다.
+    environment: production
+    permissions:
+      contents: read
+    steps:
+      - name: Run Northflank template and wait
+        env:
+          NF_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
+          NF_TEMPLATE: ${{ vars.NORTHFLANK_TEMPLATE_ID }}
+          API_IMAGE: ${{ needs.publish.outputs.api-image }}
+          MIGRATOR_IMAGE: ${{ needs.publish.outputs.migrator-image }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${NF_TOKEN}" ]; then
+            echo "::error::NORTHFLANK_API_TOKEN secret is not set on the 'production' environment. See docs/10-auth-db-design.md §8."
+            exit 1
+          fi
+          if [ -z "${NF_TEMPLATE}" ]; then
+            echo "::error::NORTHFLANK_TEMPLATE_ID is not set. Add it as a variable (or secret) on the 'production' environment. GitHub keeps variables and secrets in separate stores."
+            exit 1
+          fi
+
+          # 시크릿에 개행이 섞여 들어가면 Authorization 헤더가 깨져 401 이 난다.
+          TOKEN="$(printf '%s' "${NF_TOKEN}" | tr -d '[:space:]')"
+
+          BASE="${NORTHFLANK_API}/v1/templates/${NF_TEMPLATE}"
+          echo "endpoint: ${BASE}/runs"
+
+          # 상태 코드와 본문을 나눠 받는다. --fail-with-body 로 받으면 실패 시 본문이 변수에 갇혀
+          # 로그에 안 남고, 원인(권한/경로/스코프)을 알 수 없다.
+          nf_call() {
+            local out="$1"; shift
+            HTTP="$(curl -sS -o "${out}" -w '%{http_code}' "$@")"
+          }
+
+          # 템플릿의 기본 arguments 를 이번 릴리스의 digest 로 덮어쓴다 —
+          # 템플릿에 어떤 이미지가 저장돼 있든 이번 커밋의 마이그레이션/앱이 실행된다.
+          PAYLOAD="$(node -p 'JSON.stringify({arguments:{apiImage:process.env.API_IMAGE,migratorImage:process.env.MIGRATOR_IMAGE}})')"
+
+          echo "api      = ${API_IMAGE}"
+          echo "migrator = ${MIGRATOR_IMAGE}"
+          nf_call /tmp/nf-run.json -X POST \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "${PAYLOAD}" "${BASE}/runs"
+
+          if [ "${HTTP}" != "200" ]; then
+            echo "::error::Northflank returned HTTP ${HTTP} for ${BASE}/runs — $(jq -r '.error.message // "no message"' /tmp/nf-run.json 2>/dev/null)"
+            echo "On 401, run the 'Northflank Token Check' workflow — the token is most likely expired or was revoked."
+            exit 1
+          fi
+
+          RUN_ID="$(jq -r '.data.id // empty' /tmp/nf-run.json)"
+          if [ -z "${RUN_ID}" ]; then
+            echo "::error::Northflank did not return a template run id."
+            exit 1
+          fi
+          echo "Template run: ${RUN_ID}"
+
+          # status: pending|queued|running|waiting|retrying|async_wait|approval_wait|
+          #         success|failure|aborted|aborting|skipped|unknown
+          # approval_wait 는 템플릿에 Approval 노드를 넣었을 때 사람이 승인할 때까지 머무는 상태다.
+          LAST=""
+          for _ in $(seq 1 120); do
+            sleep 10
+            nf_call /tmp/nf-status.json -H "Authorization: Bearer ${TOKEN}" "${BASE}/runs/${RUN_ID}"
+            if [ "${HTTP}" != "200" ]; then
+              echo "::error::Polling ${BASE}/runs/${RUN_ID} returned HTTP ${HTTP} — $(jq -r '.error.message // "no message"' /tmp/nf-status.json 2>/dev/null). The run may still be progressing in Northflank."
+              exit 1
+            fi
+            STATUS="$(jq -r '.data.status // "unknown"' /tmp/nf-status.json)"
+            [ "${STATUS}" = "${LAST}" ] || echo "status=${STATUS}"
+            LAST="${STATUS}"
+            case "${STATUS}" in
+              success)
+                echo "Migrations applied and rollout requested."
+                exit 0
+                ;;
+              failure | aborted)
+                echo "::error::Template run ${STATUS}. Check the run in Northflank (${RUN_ID}). If the migration node failed, the deploy node did not run and the previous app version is still serving."
+                exit 1
+                ;;
+            esac
+          done
+
+          echo "::error::Timed out waiting for template run ${RUN_ID} (last status: ${LAST})."
+          exit 1

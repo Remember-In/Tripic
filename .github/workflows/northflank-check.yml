@@ -1,0 +1,76 @@
+name: Northflank Token Check
+
+# NORTHFLANK_API_TOKEN 이 아직 살아 있는지 확인한다. 릴리스가 401 로 막히면 여기부터 본다.
+#
+# 배경: 토큰은 만료되거나 폐기되면 형식이 멀쩡해도 "존재하지 않는 토큰"과 똑같은 401 을 준다.
+# 본문이 "Unauthorized" 한 줄뿐이라 응답만 봐서는 구분이 안 되므로, 만료 시각을 직접 디코드한다.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check Northflank API token
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production
+    steps:
+      - name: Check
+        env:
+          NF_TOKEN: ${{ secrets.NORTHFLANK_API_TOKEN }}
+          NF_TEMPLATE: ${{ vars.NORTHFLANK_TEMPLATE_ID }}
+        run: |
+          set -uo pipefail
+          API=https://api.northflank.com
+
+          if [ -z "${NF_TOKEN}" ]; then
+            echo "::error::NORTHFLANK_API_TOKEN is empty on the 'production' environment."
+            exit 1
+          fi
+
+          # 토큰 값은 찍지 않는다. Northflank 토큰은 JWT 라 payload 에서 만료·소속만 읽는다.
+          printf '%s' "${NF_TOKEN}" | node -e '
+            let s = ""; process.stdin.on("data", d => s += d).on("end", () => {
+              const parts = s.trim().split(".");
+              if (parts.length !== 3) return console.log("token: not a JWT — skipping expiry check");
+              try {
+                const p = JSON.parse(Buffer.from(parts[1], "base64url").toString());
+                const now = Math.floor(Date.now() / 1000);
+                console.log("issued  : " + (p.iat ? new Date(p.iat * 1000).toISOString() : "?"));
+                console.log("expires : " + (p.exp ? new Date(p.exp * 1000).toISOString() : "?"));
+                console.log("scope   : " + p.entityType + " / role " + p.roleInternalId + " / name " + p.tokenInternalId);
+                if (p.exp && p.exp < now) {
+                  console.log("::error::Token expired " + Math.round((now - p.exp) / 3600) + "h ago — create a new one in Team Settings > API > Tokens and update the secret.");
+                } else if (p.exp) {
+                  console.log("valid for another " + Math.round((p.exp - now) / 24 / 3600) + " days");
+                }
+              } catch { console.log("token: payload decode failed"); }
+            });'
+          echo
+
+          # 만료 전인데도 401 이면 그 토큰은 폐기된 것이다 — 재발급 외에 방법이 없다.
+          TOKEN="$(printf '%s' "${NF_TOKEN}" | tr -d '[:space:]')"
+          probe() {
+            local label="$1" url="$2" code
+            code="$(curl -sS -o /tmp/nf.json -w '%{http_code}' -H "Authorization: Bearer ${TOKEN}" "${url}")" \
+              || code="curl-error"
+            printf '%-28s %-4s %s\n' "${label}" "${code}" "$(jq -r '.error.message // empty' /tmp/nf.json 2>/dev/null)"
+            [ "${code}" = "200" ]
+          }
+
+          OK=0
+          probe "GET /v1/projects" "${API}/v1/projects" || OK=1
+          if [ -n "${NF_TEMPLATE}" ]; then
+            probe "GET /v1/templates/{id}" "${API}/v1/templates/${NF_TEMPLATE}" || OK=1
+          else
+            echo "NORTHFLANK_TEMPLATE_ID is not set — skipping the template check."
+          fi
+
+          if [ "${OK}" -ne 0 ]; then
+            echo "::error::Token is not accepted. If it is not expired above, it was revoked — issue a new one and replace the secret."
+            exit 1
+          fi
+          echo "Token works."

@@ -1,0 +1,27 @@
+# 로컬 개발용 인프라. 프로덕션 배포에는 사용하지 않는다 (Northflank Managed DB 예정).
+services:
+  db:
+    image: postgres:18.2-alpine3.23
+    container_name: tripic-db
+    environment:
+      POSTGRES_USER: tripic
+      # 로컬 전용 자격증명 — 루프백 바인딩이라 외부 노출 없음
+      POSTGRES_PASSWORD: tripic
+      POSTGRES_DB: tripic
+    ports:
+      # 임의의 고포트: 로컬의 다른 postgres(5432 등)와 충돌 회피
+      - "127.0.0.1:48291:5432"
+    volumes:
+      # postgres 18부터 PGDATA가 /var/lib/postgresql/18/docker 로 이동 —
+      # /var/lib/postgresql/data 에 마운트하면 데이터가 익명 볼륨으로 새어 유실된다
+      - tripic-db-data:/var/lib/postgresql
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tripic -d tripic"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  tripic-db-data:

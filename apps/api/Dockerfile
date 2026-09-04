@@ -32,6 +32,11 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 
 # 2) 소스 복사 후 빌드
 COPY . .
+# api 가 의존하는 workspace 패키지(@tripic/shared)의 dist 를 먼저 만든다 (deploy 산출물에도 포함됨)
+RUN pnpm --filter @tripic/shared build
+# Prisma client 를 src/generated 에 생성 (Prisma 7: Rust 엔진 없음, SWC 가 dist 로 함께 컴파일)
+# generate 는 DB 에 접속하지 않지만 prisma.config.ts 가 DATABASE_URL 존재를 요구하므로 빌드용 더미를 준다
+RUN DATABASE_URL="postgresql://build:build@127.0.0.1:1/build" pnpm --filter @tripic/api db:generate
 RUN pnpm --filter @tripic/api build
 
 # 3) prod 의존성만 추린 배포 산출물 생성 (node_modules + package.json)
@@ -71,3 +76,5 @@ EXPOSE 3000
 # Northflank(쿠버네티스 기반)는 Docker HEALTHCHECK 를 무시하고 플랫폼 probe 를 사용하므로,
 # Northflank 설정에서 HTTP liveness/readiness probe 를 GET /health 로 지정한다.
 CMD ["node", "dist/src/main.js"]
+
+# DB 마이그레이션 이미지는 이 파일에 두지 않는다 — apps/api/Dockerfile.migrate 참고.

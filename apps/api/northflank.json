@@ -1,0 +1,105 @@
+{
+  "$schema": "https://api.northflank.com/v1/schemas/template",
+  "apiVersion": "v1.2",
+  "arguments": {
+    "projectId": "tripic",
+    "migratorImage": "ghcr.io/remember-in/tripic-migrator:latest",
+    "apiImage": "ghcr.io/remember-in/tripic-api:latest"
+  },
+  "spec": {
+    "kind": "Workflow",
+    "spec": {
+      "type": "sequential",
+      "context": {
+        "projectId": "${args.projectId}"
+      },
+      "steps": [
+        {
+          "kind": "ManualJob",
+          "ref": "migrateJob",
+          "spec": {
+            "name": "tripic-migrate",
+            "description": "prisma migrate deploy - one-shot image built from apps/api/Dockerfile.migrate",
+            "billing": {
+              "deploymentPlan": "nf-compute-20"
+            },
+            "backoffLimit": 0,
+            "activeDeadlineSeconds": 900,
+            "deployment": {
+              "external": {
+                "imagePath": "${args.migratorImage}"
+              },
+              "docker": {
+                "configType": "default"
+              }
+            },
+            "buildConfiguration": {
+              "pathIgnoreRules": [],
+              "isAllowList": false,
+              "ciIgnoreFlagsEnabled": false
+            },
+            "runtimeEnvironment": {},
+            "buildArguments": {}
+          },
+          "updateMode": "put"
+        },
+        {
+          "kind": "JobRun",
+          "ref": "migrateRun",
+          "spec": {
+            "jobId": "tripic-migrate",
+            "deployment": {
+              "external": {
+                "imagePath": "${args.migratorImage}"
+              },
+              "docker": {
+                "configType": "default"
+              }
+            }
+          }
+        },
+        {
+          "kind": "Condition",
+          "ref": "migrateSucceeded",
+          "spec": {
+            "kind": "JobRun",
+            "spec": {
+              "type": "success",
+              "data": {
+                "jobId": "tripic-migrate",
+                "runId": "${refs.migrateRun.id}"
+              }
+            }
+          }
+        },
+        {
+          "kind": "DeploymentService",
+          "ref": "apiService",
+          "updateMode": "patch",
+          "spec": {
+            "name": "tripic",
+            "deployment": {
+              "external": {
+                "imagePath": "${args.apiImage}"
+              },
+              "docker": {
+                "configType": "default"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "options": {
+    "autorun": false,
+    "concurrencyPolicy": "queue"
+  },
+  "gitops": {
+    "repoUrl": "https://github.com/Remember-In/Tripic",
+    "vcsService": "github",
+    "accountLogin": "Remember-In",
+    "branch": "main",
+    "filePath": "/apps/api/northflank.json"
+  }
+}

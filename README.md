@@ -9,8 +9,8 @@
 ```txt
 Tripic/
   apps/
-    api/        # @tripic/api — NestJS 비위치성 운영 API (health/app-config/notices/legal/version)
-    mobile/     # @tripic/mobile — Expo Router 기반 React Native 앱
+    api/        # @tripic/api — NestJS API (health/app-config/notices/version + auth/users)
+    mobile/     # @tripic/mobile — Expo Router + FSD 기반 React Native 앱
   packages/
     shared/     # @tripic/shared — 공통 타입/상수 (앱·서버 공유 계약)
     tsconfig/   # @tripic/tsconfig — 공유 TypeScript 설정 (이름으로 extends)
@@ -63,4 +63,4 @@ pnpm --filter @tripic/api test:e2e    # e2e (pactum)
 curl http://localhost:3000/health     # → {"status":"ok"}
 ```
 
-NestJS 서버는 **비위치성 운영 API에만** 한정한다 (PRD 10.3 / 14.2). GPS 좌표·EXIF 사진·방문 기록을 수신/저장하지 않으며 P0에서 DB/ORM을 사용하지 않는다.
+**P0에서** NestJS 서버는 **비위치성 운영 API에만** 한정했다 (PRD 10.3 / 14.2) — GPS 좌표·EXIF 사진·방문 기록을 수신/저장하지 않고 DB/ORM도 사용하지 않는다. P1 확장으로 **계정/인증(카카오 로그인) + 사용자 확정 여행 기록** PostgreSQL + Prisma 스키마를 도입했다 — 기록 중 **콘텐츠(제목·일기·해시태그 등)는 서버 저장 가능**하고, **방문 관광지(record_places) 부분만** 위치정보지원센터 사전 검토 후 노출한다. [docs/10-auth-db-design.md](./docs/10-auth-db-design.md) · [docs/11-records-api-design.md](./docs/11-records-api-design.md) 참고.

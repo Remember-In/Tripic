@@ -12,6 +12,16 @@ build/
 .env.*
 !.env.example
 
+# App signing credentials (never commit)
+credentials.json
+*.cer
+*.certSigningRequest
+*.key
+*.mobileprovision
+*.p8
+*.p12
+*.provisionprofile
+
 # Logs
 logs/
 *.log
@@ -43,3 +53,6 @@ Thumbs.db
 
 # Local AI assistant settings and worktrees
 .claude/
+
+# Prisma 생성 클라이언트 (로컬/CI/Docker에서 generate)
+apps/api/src/generated/
