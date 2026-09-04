@@ -51,3 +51,30 @@ export {
   type UpdateRecordRequestDto,
   type UpsertRecordEntryRequestDto,
 } from "./model/recordContract";
+
+export {
+  GUEST_LOCAL_RECORD_OWNER_KEY,
+  createUserLocalRecordOwnerKey,
+  type CreateLocalTravelRecordInput,
+  type LocalRecordDay,
+  type LocalRecordDayInput,
+  type LocalRecordOwnerKey,
+  type LocalRecordPhoto,
+  type LocalRecordPhotoInput,
+  type LocalRecordVisit,
+  type LocalRecordVisitInput,
+  type LocalRegionProgress,
+  type LocalRegionProgressScope,
+  type LocalTravelRecord,
+  type LocalTravelRecordSummary,
+  type UpdateLocalTravelRecordInput,
+} from "./model/localRecord";
+
+export {
+  LocalRecordNotFoundError,
+  LocalRecordValidationError,
+  SqliteLocalTravelRecordRepository,
+  createSqliteLocalTravelRecordRepository,
+  localTravelRecordRepository,
+  type LocalTravelRecordRepository,
+} from "./api/localRecordRepository";
