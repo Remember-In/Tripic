@@ -10,6 +10,10 @@ import {
 } from "react-native";
 
 import { useAuthSession } from "@/features/auth-session";
+import {
+  useClearLocalRecordsMutation,
+  useLocalRecordOwnerKey,
+} from "@/features/local-records";
 import { ChevronRightIcon } from "@/shared/assets/icons";
 import { radii, semanticColors, spacing } from "@/shared/config/theme";
 import { AppText, PageHeader, Screen } from "@/shared/ui";
@@ -39,6 +43,9 @@ export function SettingsPage() {
   const { isAuthenticated, logout, retrySessionRestore, status, user } =
     useAuthSession();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isDeletingRecords, setIsDeletingRecords] = useState(false);
+  const ownerKey = useLocalRecordOwnerKey();
+  const clearRecords = useClearLocalRecordsMutation();
 
   const goBack = () => {
     if (router.canGoBack()) {
@@ -49,23 +56,40 @@ export function SettingsPage() {
     router.replace("/");
   };
 
-  const showGuide = (title: string, message: string) => {
-    Alert.alert(title, message, [{ text: "확인" }]);
+  const performClearRecords = async () => {
+    if (!ownerKey || isDeletingRecords) {
+      return;
+    }
+
+    setIsDeletingRecords(true);
+    try {
+      const result = await clearRecords.mutateAsync({ ownerKey });
+      Alert.alert(
+        "초기화했어요",
+        result.photoCleanup.deferred || result.photoCleanup.failedCount > 0
+          ? "기록은 삭제했어요. 일부 사진 사본은 다음 실행 때 다시 정리할게요."
+          : "이 계정의 로컬 여행 기록과 사진 사본을 삭제했어요.",
+      );
+    } catch {
+      Alert.alert("초기화하지 못했어요", "잠시 후 다시 시도해 주세요.");
+    } finally {
+      setIsDeletingRecords(false);
+    }
   };
 
-  const confirmDelete = (title: string, message: string) => {
-    Alert.alert(title, message, [
-      { style: "cancel", text: "취소" },
-      {
-        onPress: () =>
-          Alert.alert(
-            "프로토타입 안내",
-            "현재 화면에서는 실제 기록 데이터를 삭제하지 않아요.",
-          ),
-        style: "destructive",
-        text: "삭제",
-      },
-    ]);
+  const confirmClearRecords = () => {
+    Alert.alert(
+      "전체 기록을 초기화할까요?",
+      "이 계정의 모든 여행 기록과 지도 스탬프가 사라지며 복구할 수 없어요.",
+      [
+        { style: "cancel", text: "취소" },
+        {
+          onPress: () => void performClearRecords(),
+          style: "destructive",
+          text: "삭제",
+        },
+      ],
+    );
   };
 
   const performLogout = async () => {
@@ -213,37 +237,21 @@ export function SettingsPage() {
               <SettingsRow
                 label="위치 정보 활용 안내"
                 onPress={() =>
-                  showGuide(
-                    "위치 정보 활용 안내",
-                    "사진 속 위치 정보는 기기에서 관광지 후보를 찾는 용도로만 사용해요. GPS 좌표는 Tripic 서버에 보내거나 저장하지 않아요.",
-                  )
+                  router.push("/settings/location-information" as Href)
                 }
               />
               <SettingsRow
                 label="EXIF 사용 안내"
-                onPress={() =>
-                  showGuide(
-                    "EXIF 사용 안내",
-                    "사진의 촬영 위치와 시간 정보는 기기에서 분석해 방문 장소를 제안하는 데 사용해요. 사진 원본과 EXIF 정보는 Tripic 서버에 보내지 않아요.",
-                  )
-                }
+                onPress={() => router.push("/settings/photo-metadata" as Href)}
               />
               <SettingsRow
                 label="개인정보 처리방침"
-                onPress={() =>
-                  showGuide(
-                    "개인정보 처리방침",
-                    "사진 원본과 GPS·EXIF 정보는 Tripic 서버에 전송하지 않아요. 계정·프로필과 사용자가 확정한 기록 콘텐츠는 기기 간 동기화 대상이 될 수 있어요. 배포 전 공개 HTTPS 전문 주소를 연결해야 해요.",
-                  )
-                }
+                onPress={() => router.push("/settings/privacy-policy" as Href)}
               />
               <SettingsRow
                 label="서비스 이용약관"
                 onPress={() =>
-                  showGuide(
-                    "서비스 이용약관",
-                    "Tripic은 카카오 로그인으로 계정·프로필을 관리하고, 사용자가 확정한 기록 콘텐츠를 동기화할 수 있어요. 배포 전 공개 HTTPS 전문 주소를 연결해야 해요.",
-                  )
+                  router.push("/settings/terms-of-service" as Href)
                 }
               />
             </View>
@@ -259,23 +267,27 @@ export function SettingsPage() {
             </AppText>
             <View style={styles.card}>
               <SettingsRow
-                label="기록 데이터 삭제"
-                onPress={() =>
-                  confirmDelete(
-                    "기록 데이터를 삭제할까요?",
-                    "선택한 기록은 삭제 후 복구할 수 없어요.",
-                  )
-                }
+                label="개별 기록 관리"
+                onPress={() => router.push("/records")}
               />
-              <SettingsRow
-                label="전체 기록 초기화"
-                onPress={() =>
-                  confirmDelete(
-                    "전체 기록을 초기화할까요?",
-                    "모든 여행 기록과 지도 스탬프가 사라지며 복구할 수 없어요.",
-                  )
-                }
-              />
+              <Pressable
+                accessibilityLabel="전체 기록 초기화"
+                accessibilityRole="button"
+                accessibilityState={{ disabled: isDeletingRecords }}
+                disabled={isDeletingRecords}
+                onPress={confirmClearRecords}
+                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+              >
+                <AppText style={styles.logoutText} variant="subtitle03">
+                  전체 기록 초기화
+                </AppText>
+                {isDeletingRecords ? (
+                  <ActivityIndicator
+                    color={semanticColors.feedback.error.level1}
+                    size="small"
+                  />
+                ) : null}
+              </Pressable>
             </View>
           </View>
         </ScrollView>
