@@ -35,6 +35,7 @@ export type SessionTokensAndUser = AuthTokens & {
 };
 
 type AuthSessionContextValue = {
+  clearLocalSession: () => Promise<void>;
   establishSession: (session: SessionTokensAndUser) => Promise<void>;
   isAuthenticated: boolean;
   logout: () => Promise<void>;
@@ -357,6 +358,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
 
   const value = useMemo<AuthSessionContextValue>(
     () => ({
+      clearLocalSession: clearSession,
       establishSession,
       isAuthenticated: status === "authenticated",
       logout,
@@ -365,7 +367,15 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
       status,
       user,
     }),
-    [establishSession, logout, replaceUser, retrySessionRestore, status, user],
+    [
+      clearSession,
+      establishSession,
+      logout,
+      replaceUser,
+      retrySessionRestore,
+      status,
+      user,
+    ],
   );
 
   return (

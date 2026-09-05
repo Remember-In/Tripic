@@ -27,3 +27,10 @@ export async function updateMe(input: UpdateMeInput): Promise<AuthUser> {
 
   return authUserSchema.parse(response);
 }
+
+export async function deleteMe(): Promise<void> {
+  await requestJson("/users/me", {
+    auth: true,
+    method: "DELETE",
+  });
+}

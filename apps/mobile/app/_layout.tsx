@@ -20,9 +20,11 @@ import {
   type LocalRecordOwnerKey,
 } from "@/entities/travel-record";
 import { AppVersionGuard } from "@/features/app-version-guard";
+import { recoverPendingWithdrawalCleanupOnAppStart } from "@/features/account-withdrawal";
 import { AuthSessionProvider, useAuthSession } from "@/features/auth-session";
 import { CreateRecordSessionProvider } from "@/features/create-record-session";
 import {
+  flushAllQueuedPhotoCleanup,
   flushQueuedPhotoCleanup,
   localRecordQueryKeys,
   LocalRecordsProvider,
@@ -40,6 +42,17 @@ function LocalRecordScope({ children }: PropsWithChildren) {
   const [lastUserId, setLastUserId] = useState<string | null>(null);
   const [isOwnerRestored, setOwnerRestored] = useState(false);
   const previousOwnerKey = useRef<LocalRecordOwnerKey | null>(null);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        // 탈퇴 완료가 확인된 계정의 기록 정리를 먼저 복구해야 사진 정리 큐가 완성된다.
+        await recoverPendingWithdrawalCleanupOnAppStart();
+      } finally {
+        await flushAllQueuedPhotoCleanup();
+      }
+    })().catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     let active = true;

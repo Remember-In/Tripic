@@ -118,3 +118,49 @@ describe("SqliteLocalTravelRecordRepository.updateRecord", () => {
     expect(fake.transactionCommitted()).toBe(false);
   });
 });
+
+describe("SqliteLocalTravelRecordRepository cleanup and ordering", () => {
+  it("lists only the owner keys that have queued photo cleanup", async () => {
+    const getAllAsync = vi.fn(async (query: string) => {
+      if (query.includes("SELECT DISTINCT cleanup.owner_key")) {
+        return [{ owner_key: "guest" }, { owner_key: "user:user-1" }];
+      }
+      return [];
+    });
+    const repository = createSqliteLocalTravelRecordRepository({
+      getAllAsync,
+    } as unknown as Parameters<
+      typeof createSqliteLocalTravelRecordRepository
+    >[0]);
+
+    await expect(repository.listPhotoCleanupOwnerKeys()).resolves.toEqual([
+      "guest",
+      "user:user-1",
+    ]);
+    expect(getAllAsync).toHaveBeenCalledWith(
+      expect.stringContaining("FROM local_photo_cleanup_queue AS cleanup"),
+    );
+  });
+
+  it("orders record summaries by trip end date with stable tie breakers", async () => {
+    const getAllAsync = vi.fn(async (_query: string, ..._params: unknown[]) =>
+      Promise.resolve([]),
+    );
+    const repository = createSqliteLocalTravelRecordRepository({
+      getAllAsync,
+    } as unknown as Parameters<
+      typeof createSqliteLocalTravelRecordRepository
+    >[0]);
+
+    await repository.listRecords("guest");
+
+    const summaryQuery = getAllAsync.mock.calls
+      .map((call) => call[0])
+      .find((query) => query.includes("FROM local_records AS record"));
+    expect(summaryQuery).toContain(
+      "ORDER BY COALESCE(end_date, record.created_at) DESC,",
+    );
+    expect(summaryQuery).toContain("record.created_at DESC,");
+    expect(summaryQuery).toContain("record.id DESC;");
+  });
+});

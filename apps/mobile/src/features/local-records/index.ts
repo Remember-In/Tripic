@@ -17,8 +17,10 @@ export {
   type SaveLocalRecordDraftPhotoInput,
 } from "./model/saveLocalRecordDraft";
 export {
+  flushAllQueuedPhotoCleanup,
   flushQueuedPhotoCleanup,
   type PhotoCleanupResult,
+  type PhotoCleanupSweepResult,
 } from "./lib/flushQueuedPhotoCleanup";
 
 export {

@@ -157,6 +157,7 @@ export interface LocalTravelRecordRepository {
   listPendingPhotoCleanup(
     ownerKey: LocalRecordOwnerKey,
   ): Promise<readonly string[]>;
+  listPhotoCleanupOwnerKeys(): Promise<readonly LocalRecordOwnerKey[]>;
   stagePhotoCleanup(
     ownerKey: LocalRecordOwnerKey,
     localUris: readonly string[],
@@ -827,7 +828,9 @@ export class SqliteLocalTravelRecordRepository implements LocalTravelRecordRepos
                      AND visit.user_confirmed = 1) AS visit_count
            FROM local_records AS record
            WHERE record.owner_key = ?
-           ORDER BY record.updated_at DESC, record.id DESC;`,
+           ORDER BY COALESCE(end_date, record.created_at) DESC,
+                    record.created_at DESC,
+                    record.id DESC;`,
           ownerKey,
         ),
         database.getAllAsync<TagRow>(
@@ -901,6 +904,23 @@ export class SqliteLocalTravelRecordRepository implements LocalTravelRecordRepos
         ownerKey,
       );
       return rows.map((row) => row.local_uri);
+    });
+  }
+
+  listPhotoCleanupOwnerKeys(): Promise<readonly LocalRecordOwnerKey[]> {
+    return this.enqueue(async () => {
+      const database = await this.provideDatabase();
+      const rows = await database.getAllAsync<{ owner_key: string }>(
+        `SELECT DISTINCT cleanup.owner_key
+         FROM local_photo_cleanup_queue AS cleanup
+         ORDER BY cleanup.owner_key ASC;`,
+      );
+
+      return rows.map((row) => {
+        const ownerKey = row.owner_key as LocalRecordOwnerKey;
+        assertOwnerKey(ownerKey);
+        return ownerKey;
+      });
     });
   }
 
