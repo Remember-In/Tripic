@@ -95,7 +95,29 @@ function parseListItem(value: unknown): KtoListItem | null {
 }
 
 function extractItems(payload: unknown): readonly unknown[] {
-  const response = asRecord(asRecord(payload).response);
+  const root = asRecord(payload);
+  const flatResultCode = asString(root.resultCode);
+  if (flatResultCode && flatResultCode !== "0000") {
+    throw new KtoApiError(
+      flatResultCode,
+      asString(root.resultMsg) || "TourAPI 요청에 실패했습니다.",
+    );
+  }
+
+  const serviceResponse = asRecord(root.OpenAPI_ServiceResponse);
+  const commonErrorHeader = asRecord(serviceResponse.cmmMsgHeader);
+  const gatewayResultCode = asString(commonErrorHeader.returnReasonCode);
+  const gatewayResultMessage =
+    asString(commonErrorHeader.returnAuthMsg) ||
+    asString(commonErrorHeader.errMsg);
+  if (gatewayResultCode || gatewayResultMessage) {
+    throw new KtoApiError(
+      gatewayResultCode || "OPEN_API_SERVICE_ERROR",
+      gatewayResultMessage || "TourAPI 요청에 실패했습니다.",
+    );
+  }
+
+  const response = asRecord(root.response);
   const header = asRecord(response.header);
   const resultCode = asString(header.resultCode);
   if (resultCode && resultCode !== "0000") {
@@ -165,6 +187,24 @@ async function requestKto(
       headers: { Accept: "application/json" },
       signal: controller.signal,
     });
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      if (!response.ok) {
+        throw new KtoApiError(
+          `HTTP_${response.status}`,
+          "관광정보 서버에 연결하지 못했습니다.",
+        );
+      }
+      throw new KtoApiError(
+        "INVALID_RESPONSE",
+        "관광정보 서버의 응답을 해석하지 못했습니다.",
+      );
+    }
+
+    const items = extractItems(payload);
     if (!response.ok) {
       throw new KtoApiError(
         `HTTP_${response.status}`,
@@ -172,7 +212,7 @@ async function requestKto(
       );
     }
 
-    return extractItems(await response.json());
+    return items;
   } catch (error) {
     if (error instanceof KtoApiError) {
       throw error;
@@ -282,20 +322,7 @@ export async function fetchKtoPlaceDetail(
   contentId: string,
   options?: KtoRequestOptions,
 ): Promise<KtoPlaceDetail | null> {
-  const [rawItem] = await requestKto(
-    "detailCommon2",
-    {
-      addrinfoYN: "Y",
-      areacodeYN: "Y",
-      catcodeYN: "Y",
-      contentId,
-      defaultYN: "Y",
-      firstImageYN: "Y",
-      mapinfoYN: "N",
-      overviewYN: "Y",
-    },
-    options,
-  );
+  const [rawItem] = await requestKto("detailCommon2", { contentId }, options);
   const base = parseListItem(rawItem);
   if (!base) {
     return null;
@@ -320,7 +347,6 @@ export async function fetchKtoPlaceImages(
       imageYN: "Y",
       numOfRows: 10,
       pageNo: 1,
-      subImageYN: "Y",
     },
     options,
   );

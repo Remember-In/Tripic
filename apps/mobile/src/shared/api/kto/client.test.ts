@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  fetchKtoPlaceDetail,
+  fetchKtoPlaceImages,
   fetchKtoPlacesByArea,
   fetchNearbyKtoPlaces,
+  KtoApiError,
   searchKtoPlaces,
 } from "./client";
 
@@ -166,4 +169,154 @@ describe("nearby KTO radius limits", () => {
       );
     },
   );
+});
+
+describe("KorService2 detail request parameters", () => {
+  it("requests detailCommon2 with only contentId and common parameters", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          response: {
+            body: {
+              items: {
+                item: {
+                  contentid: "126508",
+                  title: "경복궁",
+                },
+              },
+            },
+            header: { resultCode: "0000", resultMsg: "OK" },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchKtoPlaceDetail("126508");
+
+    const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
+    const url = new URL(requestUrl);
+    expect(url.pathname).toBe("/B551011/KorService2/detailCommon2");
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      MobileApp: "Tripic",
+      MobileOS: "ETC",
+      _type: "json",
+      contentId: "126508",
+      serviceKey: "test-key",
+    });
+  });
+
+  it("requests detailImage2 without the removed subImageYN parameter", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(successfulListPayload(0)), { status: 200 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchKtoPlaceImages("126508");
+
+    const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
+    const url = new URL(requestUrl);
+    expect(url.pathname).toBe("/B551011/KorService2/detailImage2");
+    expect(url.searchParams.get("contentId")).toBe("126508");
+    expect(url.searchParams.get("imageYN")).toBe("Y");
+    expect(url.searchParams.get("numOfRows")).toBe("10");
+    expect(url.searchParams.get("pageNo")).toBe("1");
+    expect(url.searchParams.has("subImageYN")).toBe(false);
+  });
+});
+
+describe("KTO API errors", () => {
+  it("throws KtoApiError for a flat KorService2 error response", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          responseTime: "2026-09-05T12:34:56",
+          resultCode: "05",
+          resultMsg: "INVALID REQUEST PARAMETER ERROR",
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchKtoPlaces("경복궁")).rejects.toEqual(
+      expect.objectContaining<KtoApiError>({
+        code: "05",
+        message: "INVALID REQUEST PARAMETER ERROR",
+        name: "KtoApiError",
+      }),
+    );
+  });
+
+  it("keeps handling nested TourAPI response header errors", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          response: {
+            body: {},
+            header: { resultCode: "30", resultMsg: "SERVICE KEY ERROR" },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchKtoPlaces("경복궁")).rejects.toMatchObject({
+      code: "30",
+      message: "SERVICE KEY ERROR",
+      name: "KtoApiError",
+    });
+  });
+
+  it("prioritizes the OpenAPI gateway JSON error over its HTTP status", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          OpenAPI_ServiceResponse: {
+            cmmMsgHeader: {
+              errMsg: "SERVICE ERROR",
+              returnAuthMsg: "SERVICE_KEY_IS_NOT_REGISTERED_ERROR",
+              returnReasonCode: "30",
+            },
+          },
+        }),
+        { status: 403 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchKtoPlaces("경복궁")).rejects.toMatchObject({
+      code: "30",
+      message: "SERVICE_KEY_IS_NOT_REGISTERED_ERROR",
+      name: "KtoApiError",
+    });
+  });
+
+  it("falls back to the HTTP status for a non-JSON error response", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("Forbidden", { status: 403 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchKtoPlaces("경복궁")).rejects.toMatchObject({
+      code: "HTTP_403",
+      name: "KtoApiError",
+    });
+  });
+
+  it("reports a malformed successful response separately", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("not-json", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchKtoPlaces("경복궁")).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+      name: "KtoApiError",
+    });
+  });
 });
