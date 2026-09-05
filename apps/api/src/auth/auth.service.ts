@@ -43,11 +43,10 @@ export class AuthService {
     const { kakaoUserId } =
       await this.kakao.verifyAccessToken(kakaoAccessToken);
 
+    // 탈퇴는 hard delete 라 소셜 계정 행도 함께 사라진다 — 같은 카카오 계정으로
+    // 다시 로그인하면 신규 가입으로 처리된다 (docs/10 §3)
     const { account, isNewUser } =
       await this.accounts.findOrCreateByKakaoId(kakaoUserId);
-    if (account.status !== "ACTIVE") {
-      throw new UnauthorizedException("account is deleted");
-    }
 
     // 로그인마다 새 rotation family 시작
     const tokens = await this.issueTokens(account.userId, randomUUID());
@@ -92,7 +91,10 @@ export class AuthService {
     await this.tokens.revokeFamily(stored.familyId);
   }
 
-  /** 재사용 감지·만료·탈퇴 검사 — 위반 시 401 */
+  /**
+   * 재사용 감지·만료 검사 — 위반 시 401.
+   * 탈퇴 계정은 별도 검사가 필요 없다: 토큰 행이 cascade 로 사라져 findByHash 에서 이미 걸린다.
+   */
   private async assertUsable(stored: StoredRefreshToken): Promise<void> {
     if (stored.revoked) {
       // 이미 교체/폐기된 토큰의 재사용 → 탈취 간주, family 전체 즉시 revoke
@@ -101,9 +103,6 @@ export class AuthService {
     }
     if (stored.expiresAt < new Date()) {
       throw new UnauthorizedException("refresh token expired");
-    }
-    if (stored.userStatus !== "ACTIVE") {
-      throw new UnauthorizedException("account is deleted");
     }
   }
 

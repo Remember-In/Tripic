@@ -5,7 +5,17 @@
  * - 이 타입들은 앱/서버가 공유하는 "계약(contract)"이다.
  * - 관광공사 OpenAPI 원천 데이터(관광지명/주소/소개/이미지 등)는 저장 대상이 아니므로
  *   여기서 모델링하지 않는다. (PRD 6.3 / 12.2 준수)
+ * - 하위 파일로 쪼개지 않는다: React Native 진입점(src/react-native.js)이 이 파일을
+ *   확장자 없이 번들하는데, Metro 는 NodeNext 용 `.js` specifier 를 .ts 원본으로
+ *   되돌려 찾지 못한다 (여기서 상대 re-export 를 하면 모바일 번들이 깨진다).
+ *   단 아래의 `import type` 은 컴파일 시 완전히 지워져 번들 대상에 남지 않으므로 안전하다.
  */
+
+import type {
+  DiaryStyle,
+  EntrySource,
+  RecordTheme,
+} from "../schemas/records.js";
 
 /** 방문지 매칭 방식 (PRD 6.5) */
 export type MatchMethod =
@@ -72,4 +82,107 @@ export interface BadgeProgress {
   badgeKey: string;
   earned: boolean;
   earnedAt?: string;
+}
+
+/* ---------- 비위치성 운영 API 응답 계약 (docs/13-operations-api-design.md) ----------
+ * 서버는 DB 없이 정적 상수로 서빙하고 값 변경은 재배포로 처리한다.
+ * 요청 본문이 없으므로 zod 스키마가 아닌 **응답 타입**이 계약의 본체다. */
+
+/** GET /version — 앱 최소 지원 버전 */
+export interface VersionInfo {
+  /** semver — 미만이면 앱이 강제 업데이트를 안내한다 */
+  minSupportedVersion: string;
+  latestVersion: string;
+  /** 스토어 등록 전까지는 필드 자체를 생략한다 (빈 문자열 금지) */
+  updateUrl?: {
+    android?: string;
+    ios?: string;
+  };
+}
+
+/** GET /app-config — 앱 동작 설정 (비위치성, PRD 6.4) */
+export interface AppConfig {
+  /** 관광지 후보 조회 기준 — 릴리스 없이 조정 가능하게 원격화 */
+  kto: {
+    defaultRadiusM: number;
+    maxRadiusM: number;
+    maxCandidates: number;
+  };
+  /** 미구현/미승인 기능의 앱 노출 차단 스위치 */
+  features: {
+    aiDiary: boolean;
+    photoUpload: boolean;
+  };
+}
+
+/** GET /notices — 공지 (publishedAt 내림차순) */
+export interface Notice {
+  id: string;
+  title: string;
+  /** plain text 또는 markdown */
+  body: string;
+  /** ISO 8601 */
+  publishedAt: string;
+}
+
+/* ---------- 여행 기록 콘텐츠 응답 계약 (docs/11-records-api-design.md §3) ----------
+ * 요청 스키마와 enum 은 schemas/records.ts 에 있다 (zod). 여기는 응답 형태만 둔다.
+ * 방문 관광지(record_places)는 위치정보지원센터 검토 후 별도 추가한다. */
+
+/** 목록·생성·수정 응답 */
+export interface RecordSummary {
+  id: string;
+  title: string;
+  theme: RecordTheme | null;
+  style: DiaryStyle | null;
+  hashtags: string[];
+  /** 일기가 있는 일차 수 */
+  entryCount: number;
+  /** 내용이 있는 일차의 최소 날짜 `YYYY-MM-DD`. 없으면 null */
+  startDate: string | null;
+  /** 최대 날짜 `YYYY-MM-DD`. 없으면 null */
+  endDate: string | null;
+  /** ISO 8601 */
+  createdAt: string;
+  /** ISO 8601 */
+  updatedAt: string;
+}
+
+/** 날짜별 일기 (없는 일차는 null) */
+export interface RecordEntry {
+  content: string;
+  source: EntrySource;
+  /** ISO 8601 */
+  createdAt: string;
+  /** ISO 8601 */
+  updatedAt: string;
+}
+
+/** 상세 응답의 일차 — 일기와 사진은 날짜를 공유하는 형제 관계 */
+export interface RecordDay {
+  /** `YYYY-MM-DD` */
+  date: string;
+  entry: RecordEntry | null;
+  /** 사진 업로드(docs/11 §3.1) 구현 전까지는 항상 빈 배열 */
+  photos: RecordPhoto[];
+}
+
+export interface RecordPhoto {
+  id: string;
+  /** 바이너리 서빙 경로 */
+  url: string;
+}
+
+/** 상세 응답 — RecordSummary 에서 entryCount 대신 days (날짜 오름차순) */
+export interface RecordDetail {
+  id: string;
+  title: string;
+  theme: RecordTheme | null;
+  style: DiaryStyle | null;
+  hashtags: string[];
+  days: RecordDay[];
+  /** ISO 8601 */
+  createdAt: string;
+  /** ISO 8601 */
+  updatedAt: string;
 }

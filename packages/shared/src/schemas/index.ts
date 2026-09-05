@@ -5,3 +5,4 @@
  * 관광공사 OpenAPI 응답 전문 저장용 모델은 만들지 않는다.
  */
 export * from "./auth.js";
+export * from "./records.js";

@@ -14,9 +14,9 @@ export class PrismaRefreshTokensAdapter implements RefreshTokens {
   constructor(private readonly prisma: PrismaService) {}
 
   async findByHash(tokenHash: string): Promise<StoredRefreshToken | null> {
+    // 탈퇴하면 이 행 자체가 cascade 로 사라지므로 사용자 상태를 함께 조회할 필요가 없다
     const row = await this.prisma.refreshToken.findUnique({
       where: { tokenHash },
-      include: { user: { select: { status: true } } },
     });
     if (!row) return null;
     return {
@@ -25,7 +25,6 @@ export class PrismaRefreshTokensAdapter implements RefreshTokens {
       userId: row.userId,
       revoked: row.revokedAt !== null || row.replacedById !== null,
       expiresAt: row.expiresAt,
-      userStatus: row.user.status,
     };
   }
 

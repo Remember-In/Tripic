@@ -52,7 +52,7 @@ export class PrismaAuthAccountsAdapter implements AuthAccounts {
   }
 
   private toAccount(user: User): AuthAccount {
-    return { userId: user.id, nickname: user.nickname, status: user.status };
+    return { userId: user.id, nickname: user.nickname };
   }
 
   private isUniqueViolation(error: unknown): boolean {
