@@ -8,6 +8,14 @@
 # 검사에 걸리면 JSON 으로 deny 를 돌려줘 커밋을 막는다. 스크립트 자체는 항상 0 으로 끝낸다.
 set -uo pipefail
 
+# settings.json 의 `if` 필터에만 기대지 않고 여기서 직접 커밋 명령만 걸러낸다.
+# (필터가 동작하지 않으면 모든 Bash 호출이 이 검사에 걸려 작업이 멈춘다)
+command=$(jq -r '.tool_input.command // ""' 2>/dev/null)
+case "$command" in
+  *"git commit"*) ;;
+  *) exit 0 ;;
+esac
+
 root=$(git rev-parse --show-toplevel 2>/dev/null || echo "${CLAUDE_PROJECT_DIR:-.}")
 cd "$root" || exit 0
 

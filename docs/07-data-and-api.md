@@ -14,7 +14,10 @@
 
 ### 12.3 서버 저장 정책
 
-GPS 좌표 서버 미전송, EXIF 포함 원본 사진 미업로드, 방문 장소 기록 서버 미저장. 비위치성 앱 설정·공지·버전만 서버 제공.
+GPS 좌표는 Tripic 서버에 전송하지 않고 로컬 DB에도 저장하지 않는다. 위치 기반 후보 조회가
+필요할 때만 앱이 한국관광공사 OpenAPI를 직접 호출한다. EXIF 포함 원본 사진과 KTO 원천 데이터도
+Tripic 서버에 업로드·저장하지 않는다. P0 서버는 앱 설정·공지·버전 같은 비위치성 운영 정보만
+제공한다.
 
 > **P1 진행 현황**: 계정/인증 + 사용자 확정 여행 기록(제목/일기/contentId·지역코드)의 서버 스키마가
 > 준비되었다 ([10-auth-db-design.md](./10-auth-db-design.md)). 기록 중 **콘텐츠(제목·일기·해시태그)는
@@ -103,5 +106,23 @@ GPS 좌표 서버 미전송, EXIF 포함 원본 사진 미업로드, 방문 장�
 | GET /notices    | 공지사항 조회          |
 | GET /version    | 앱 최소 지원 버전 조회 |
 
-서버가 수신하지 않는 데이터: GPS 좌표, EXIF 포함 원본 사진, 실시간 위치 정보, 방문 장소 기록.
-(예외: AI 일기 생성 요청의 관광지명·메모는 저장 없이 일시 처리 — [11-records-api-design.md](./11-records-api-design.md) §3.2)
+서버가 수신하지 않는 데이터: GPS 좌표, EXIF 포함 원본 사진, 실시간 위치 정보, KTO 원천 데이터.
+방문 관광지의 `contentId`·지역코드는 사용자가 능동적으로 확정한 뒤, 위치정보지원센터 사전 검토를
+통과한 경우에만 서버 API를 노출한다. 관광지명·주소·소개·이미지 등 KTO 원천 데이터는 저장하지
+않는다. AI 일기 생성 요청의 관광지명·메모는 저장 없이 일시 처리하는 예외가 있다
+([11-records-api-design.md](./11-records-api-design.md) §3.2).
+
+### 14.3 P1 인증·기록 API
+
+| API                | 역할                                      |
+| ------------------ | ----------------------------------------- |
+| POST /auth/kakao   | 카카오 토큰 검증 후 Tripic 세션 발급      |
+| POST /auth/refresh | refresh token rotation                    |
+| POST /auth/logout  | refresh token family 폐기                 |
+| GET /users/me      | 내 프로필 조회                            |
+| PATCH /users/me    | 닉네임 수정                               |
+| /records 계열      | 사용자 확정 기록 콘텐츠 API(설계·구현 중) |
+
+인증·사용자 API의 현재 계약은 [10-auth-db-design.md](./10-auth-db-design.md), 기록 API와 사진·AI
+처리 예외는 [11-records-api-design.md](./11-records-api-design.md)를 따른다. `record_places` API는
+[12-location-law.md](./12-location-law.md)의 사전 검토 게이트를 통과하기 전까지 노출하지 않는다.

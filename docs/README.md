@@ -21,10 +21,17 @@
 | [12-location-law.md](./12-location-law.md)                   | 위치정보법 조사 및 Tripic 적용 판단                 | —           |
 | [13-operations-api-design.md](./13-operations-api-design.md) | 운영 API 응답 계약 (app-config·notices·version)     | —           |
 
+## 배포 정책 문서
+
+- [개인정보 처리방침 초안](./legal/privacy-policy.ko.md)
+- [서비스 이용약관 초안](./legal/terms-of-service.ko.md)
+- [위치기반서비스 이용약관 초안](./legal/location-based-service-terms.ko.md)
+- [배포 전 정책·개인정보 체크리스트](./legal/release-legal-checklist.md)
+
 ## 핵심 제약 (전 문서 공통)
 
 - 한국관광공사 OpenAPI는 **실시간 호출**하며, 원천 데이터를 로컬/서버 DB에 저장·캐싱 서빙하지 않는다.
-- 사용자 **GPS 좌표는 백엔드 서버로 전송하지 않는다** (앱 내부에서만 사용).
+- 사용자 **GPS 좌표는 Tripic 백엔드 서버나 로컬 DB에 저장하지 않는다**. 위치 기반 후보 검색을 실행하면 앱에서 한국관광공사 OpenAPI로 직접 전송한다.
 - **P0에서는 서버 DB/ORM을 사용하지 않는다.** NestJS 서버는 비위치성 운영 API에 한정한다.
   - P1 확장([06-architecture.md](./06-architecture.md) §10.4 사전 승인)으로 **계정/인증 + 사용자 확정 여행 기록** PostgreSQL + Prisma
     스키마를 도입했다 ([10-auth-db-design.md](./10-auth-db-design.md)). GPS·EXIF·KTO 원천 데이터는 여전히 저장하지 않는다.

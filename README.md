@@ -1,6 +1,6 @@
 # Tripic
 
-사진 기반 여행 기록 게이미피케이션 서비스. 사용자가 촬영한 여행 사진을 선택하면 EXIF 위치 정보를 앱 내부에서 확인하고 한국관광공사 OpenAPI를 실시간 호출하여 방문 기록 카드와 여행 지도를 생성한다.
+사진 기반 여행 기록 게이미피케이션 서비스. 사용자가 촬영한 여행 사진을 선택하면 EXIF 위치 정보를 앱에서 확인하고, 해당 좌표를 한국관광공사 OpenAPI로 직접 전송해 방문 기록 카드와 여행 지도를 생성한다. 좌표와 사진 원본은 Tripic 서버에 저장하지 않는다.
 
 > 제품 요구사항(PRD)은 [docs/](./docs/README.md)에 주제별로 정리되어 있습니다.
 
@@ -10,7 +10,7 @@
 Tripic/
   apps/
     api/        # @tripic/api — NestJS API (health/app-config/notices/version + auth/users)
-    mobile/     # @tripic/mobile — React Native (placeholder, 추후 Expo 스캐폴딩)
+    mobile/     # @tripic/mobile — Expo Router + FSD 기반 React Native 앱
   packages/
     shared/     # @tripic/shared — 공통 타입/상수 (앱·서버 공유 계약)
     tsconfig/   # @tripic/tsconfig — 공유 TypeScript 설정 (이름으로 extends)
@@ -49,6 +49,9 @@ pnpm lint          # 전체 린트
 pnpm format        # prettier
 pnpm api:dev       # NestJS 개발 서버 (watch)
 pnpm api:build     # NestJS 빌드
+pnpm mobile:start  # Expo 개발 서버
+pnpm mobile:ios    # iOS Simulator / 기기에서 열기
+pnpm mobile:android # Android Emulator / 기기에서 열기
 ```
 
 ## API (apps/api)

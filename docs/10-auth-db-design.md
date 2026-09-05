@@ -363,13 +363,13 @@ Northflank 실제 검증은 통과하므로 이 경고는 무시한다.
 - [x] AuthModule — `ports/`(KakaoVerifier·AuthAccounts·RefreshTokens) + `adapters/`(kakao-api fetch,
       prisma-\*), 전역 JwtAuthGuard + `@Public()`, rotation은 어댑터 트랜잭션으로 원자성 보장
 - [x] `KAKAO_APP_ID` env 필수화 — 미설정 시 부팅 실패, app_id 불일치 시 401 (타 앱 토큰 차단)
-- [x] 탈퇴 계정 검사 — login/refresh/me 에서 `status === ACTIVE` 확인 (구현 당시 §3 규칙;
-      이후 전면 hard delete 정책 변경으로 이 검사·컬럼은 다음 구현 브랜치에서 제거 예정)
-- [x] UsersModule (`GET/PATCH /users/me`, 닉네임 온보딩)
+- [x] 전면 hard delete 전환 — `status`/`deletedAt` 제거, `DELETE /users/me`에서 계정 연관
+      데이터를 cascade 파기하고 남은 토큰의 사용자 조회를 차단
+- [x] UsersModule (`GET/PATCH/DELETE /users/me`, 닉네임 온보딩·회원탈퇴)
 - [x] 단위 테스트(포트 in-memory fake) + e2e(**Testcontainers** Postgres + PactumJS, 카카오 port stub)
 - [x] Dockerfile: shared build → `prisma generate` → `nest build` — Prisma 7은 엔진 바이너리가 없어
       6에서 우려했던 `pnpm deploy` 재생성 핵과 alpine musl `binaryTargets` 이슈가 사라짐
 
-남은 것: 회원탈퇴 API(`users` 행 hard delete → cascade 일괄 파기 — §3 정책, status/deletedAt 제거 마이그레이션 포함),
-여행 기록 콘텐츠 API([11-records-api-design.md](./11-records-api-design.md) 설계대로 구현),
-방문 관광지 API(위치정보지원센터 검토 후).
+남은 것: 사진 업로드·AI 일기 API와 방문 관광지 API(위치정보지원센터 검토 후). 여행 기록
+콘텐츠 API는 [11-records-api-design.md](./11-records-api-design.md)의 사진·방문지 제외 범위로
+구현 완료했다.

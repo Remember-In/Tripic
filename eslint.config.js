@@ -11,7 +11,7 @@ export default tseslint.config(
       "**/node_modules/**",
       "**/coverage/**",
       "**/src/generated/**",
-      "apps/mobile/**",
+      "apps/mobile/.expo/**",
     ],
   },
   js.configs.recommended,
