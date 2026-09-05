@@ -57,11 +57,13 @@ export type UpdateRecordInput = z.infer<typeof updateRecordSchema>;
 export const entryDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "YYYY-MM-DD 형식이어야 합니다")
-  .refine(
-    (value) =>
-      new Date(`${value}T00:00:00.000Z`).toISOString().startsWith(value),
-    "존재하지 않는 날짜입니다",
-  );
+  .refine((value) => {
+    // 월/일이 범위를 벗어나면 Invalid Date 가 되고 toISOString() 이 예외를 던지므로
+    // 먼저 유효성을 확인한다. 그다음 왕복 비교로 2026-02-30 같은 넘침을 걸러낸다.
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    if (Number.isNaN(parsed.getTime())) return false;
+    return parsed.toISOString().startsWith(value);
+  }, "존재하지 않는 날짜입니다");
 
 /** PUT /records/:id/days/:date/entry */
 export const upsertEntrySchema = z.object({

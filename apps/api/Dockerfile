@@ -23,7 +23,11 @@ FROM base AS build
 
 # 1) 매니페스트만 먼저 복사해 의존성 설치 레이어 캐싱
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc ./
-COPY packages/tsconfig/package.json packages/tsconfig/
+# tsconfig 패키지는 package.json 만이 아니라 통째로 복사한다.
+# .npmrc 의 inject-workspace-packages=true 는 워크스페이스 의존성을 심볼릭 링크가 아니라
+# "복사"하므로, install 시점에 없는 파일(base.json)은 나중에 COPY . . 를 해도 주입본에 반영되지
+# 않는다 → prisma generate / nest build 가 '@tripic/tsconfig/base.json' 을 못 찾는다.
+COPY packages/tsconfig/ packages/tsconfig/
 COPY packages/shared/package.json packages/shared/
 COPY apps/api/package.json apps/api/
 
@@ -34,6 +38,10 @@ RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
 COPY . .
 # api 가 의존하는 workspace 패키지(@tripic/shared)의 dist 를 먼저 만든다 (deploy 산출물에도 포함됨)
 RUN pnpm --filter @tripic/shared build
+# 주입(inject-workspace-packages)된 @tripic/shared 복사본은 위 빌드 산출물을 자동으로 받지 않는다.
+# 재설치로 주입본을 갱신해야 api 가 dist/index.d.ts 를 찾는다 (네트워크 없이 store 에서 복원).
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
+    pnpm install --frozen-lockfile --offline
 # Prisma client 를 src/generated 에 생성 (Prisma 7: Rust 엔진 없음, SWC 가 dist 로 함께 컴파일)
 # generate 는 DB 에 접속하지 않지만 prisma.config.ts 가 DATABASE_URL 존재를 요구하므로 빌드용 더미를 준다
 RUN DATABASE_URL="postgresql://build:build@127.0.0.1:1/build" pnpm --filter @tripic/api db:generate

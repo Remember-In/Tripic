@@ -1,14 +1,22 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
   Get,
+  Header,
   HttpCode,
   Param,
   Patch,
   Post,
   Put,
+  Res,
+  StreamableFile,
+  UploadedFile,
+  UseInterceptors,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import type { Response } from "express";
 import {
   createRecordSchema,
   entryDateSchema,
@@ -17,13 +25,22 @@ import {
   type CreateRecordInput,
   type RecordDetail,
   type RecordSummary,
+  type RecordPhoto,
   type UpdateRecordInput,
   type UpsertEntryInput,
 } from "@tripic/shared";
 import { CurrentUser } from "@/auth/current-user.decorator";
 import { ZodValidationPipe } from "@/common/zod-validation.pipe";
 import type { StoredEntry } from "@/records/ports/records-repository.port";
-import { RecordsService } from "@/records/records.service";
+import { MAX_PHOTO_BYTES, RecordsService } from "@/records/records.service";
+
+/**
+ * multer 메모리 스토리지가 넘겨주는 값 중 실제로 쓰는 부분만 선언한다.
+ * 전역 `Express.Multer` 네임스페이스에 의존하지 않아 타입 로딩 순서와 무관하다.
+ */
+interface UploadedPhoto {
+  buffer: Buffer<ArrayBuffer>;
+}
 
 /**
  * 여행 기록 콘텐츠 API (docs/11-records-api-design.md §3).
@@ -104,5 +121,54 @@ export class RecordsController {
     @Param("date", new ZodValidationPipe(entryDateSchema)) date: string,
   ): Promise<void> {
     await this.records.removeEntry(userId, recordId, date);
+  }
+
+  /**
+   * POST /records/:id/days/:date/photos — 위치 메타데이터가 제거된 사본 업로드 (201).
+   * multipart 필드명은 `photo`. 스트림 단계에서 크기를 잘라 과대 요청을 메모리에 담지 않는다.
+   */
+  @Post(":id/days/:date/photos")
+  @UseInterceptors(
+    FileInterceptor("photo", { limits: { fileSize: MAX_PHOTO_BYTES } }),
+  )
+  addPhoto(
+    @CurrentUser() userId: string,
+    @Param("id") recordId: string,
+    @Param("date", new ZodValidationPipe(entryDateSchema)) date: string,
+    @UploadedFile() file: UploadedPhoto | undefined,
+  ): Promise<RecordPhoto> {
+    if (!file) throw new BadRequestException("photo file is required");
+    return this.records.addPhoto(userId, recordId, date, file.buffer);
+  }
+
+  /**
+   * GET /records/:id/days/:date/photos/:photoId — 사진 바이너리 서빙.
+   * 콘텐츠 스니핑을 막고(nosniff), 본인 사진이므로 캐시는 private 으로 둔다.
+   */
+  @Get(":id/days/:date/photos/:photoId")
+  @Header("X-Content-Type-Options", "nosniff")
+  @Header("Cache-Control", "private, max-age=300")
+  async servePhoto(
+    @CurrentUser() userId: string,
+    @Param("id") recordId: string,
+    @Param("date", new ZodValidationPipe(entryDateSchema)) date: string,
+    @Param("photoId") photoId: string,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<StreamableFile> {
+    const photo = await this.records.findPhoto(userId, recordId, date, photoId);
+    response.setHeader("Content-Type", photo.mimeType);
+    return new StreamableFile(photo.data);
+  }
+
+  /** DELETE /records/:id/days/:date/photos/:photoId — 사진 즉시 삭제 */
+  @Delete(":id/days/:date/photos/:photoId")
+  @HttpCode(204)
+  async removePhoto(
+    @CurrentUser() userId: string,
+    @Param("id") recordId: string,
+    @Param("date", new ZodValidationPipe(entryDateSchema)) date: string,
+    @Param("photoId") photoId: string,
+  ): Promise<void> {
+    await this.records.removePhoto(userId, recordId, date, photoId);
   }
 }

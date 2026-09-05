@@ -36,6 +36,7 @@
       "@swc/core",
       "esbuild",
       "prisma",
+      "sharp",
       "unrs-resolver"
     ],
     "overrides": {

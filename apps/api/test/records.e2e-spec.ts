@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Test } from "@nestjs/testing";
 import { UnauthorizedException, type INestApplication } from "@nestjs/common";
 import { request, spec } from "pactum";
+import sharp from "sharp";
 import { z } from "zod";
 import { AppModule } from "@/app.module";
 import {
@@ -50,6 +51,11 @@ const detailSchema = z.object({
       photos: z.array(z.unknown()),
     }),
   ),
+});
+
+const photoSchema = z.object({
+  id: z.string().min(1),
+  url: z.string().min(1),
 });
 
 type Summary = z.infer<typeof summarySchema>;
@@ -291,6 +297,148 @@ describe("Records (e2e)", () => {
         .returns("res.body"),
     );
     expect(detail.days).toEqual([]);
+  });
+
+  describe("사진", () => {
+    /** 메타데이터 없는 사본 — 앱이 재인코딩해 올리는 것과 같은 형태 */
+    const cleanJpeg = (): Promise<Buffer> =>
+      sharp({
+        create: {
+          width: 40,
+          height: 30,
+          channels: 3,
+          background: { r: 10, g: 120, b: 200 },
+        },
+      })
+        .jpeg()
+        .toBuffer();
+
+    it("업로드하면 상세의 해당 일차에 붙고 바이너리로 받아진다", async () => {
+      const created = await createRecord(owner, "사진 업로드");
+      const image = await cleanJpeg();
+
+      const uploaded = photoSchema.parse(
+        await spec()
+          .post(`/records/${created.id}/days/2026-08-15/photos`)
+          .withBearerToken(owner)
+          .withMultiPartFormData("photo", image, {
+            filename: "trip.jpg",
+            contentType: "image/jpeg",
+          })
+          .expectStatus(201)
+          .returns("res.body"),
+      );
+      expect(uploaded.url).toBe(
+        `/records/${created.id}/days/2026-08-15/photos/${uploaded.id}`,
+      );
+
+      const detail = detailSchema.parse(
+        await spec()
+          .get(`/records/${created.id}`)
+          .withBearerToken(owner)
+          .expectStatus(200)
+          .returns("res.body"),
+      );
+      expect(detail.days).toHaveLength(1);
+      expect(detail.days[0].date).toBe("2026-08-15");
+      // 사진만 있고 일기는 없는 일차도 성립한다
+      expect(detail.days[0].entry).toBeNull();
+      expect(detail.days[0].photos).toHaveLength(1);
+
+      await spec()
+        .get(uploaded.url)
+        .withBearerToken(owner)
+        .expectStatus(200)
+        .expectHeader("content-type", "image/jpeg")
+        .expectHeader("x-content-type-options", "nosniff");
+    });
+
+    it("이미지가 아니면 400", async () => {
+      const created = await createRecord(owner, "사진 검증");
+
+      await spec()
+        .post(`/records/${created.id}/days/2026-08-15/photos`)
+        .withBearerToken(owner)
+        .withMultiPartFormData("photo", Buffer.from("그냥 텍스트"), {
+          filename: "a.jpg",
+          contentType: "image/jpeg",
+        })
+        .expectStatus(400);
+    });
+
+    it("EXIF 가 남아 있으면 400 으로 거부한다", async () => {
+      const created = await createRecord(owner, "EXIF 거부");
+      // 위치 메타데이터가 남은 사본을 흉내 낸다
+      const withExif = await sharp(await cleanJpeg())
+        .withExif({ IFD0: { Copyright: "tripic" } })
+        .toBuffer();
+
+      await spec()
+        .post(`/records/${created.id}/days/2026-08-15/photos`)
+        .withBearerToken(owner)
+        .withMultiPartFormData("photo", withExif, {
+          filename: "exif.jpg",
+          contentType: "image/jpeg",
+        })
+        .expectStatus(400);
+    });
+
+    it("타인은 남의 사진을 받아갈 수 없다 (404)", async () => {
+      const created = await createRecord(owner, "사진 소유권");
+      const uploaded = photoSchema.parse(
+        await spec()
+          .post(`/records/${created.id}/days/2026-08-15/photos`)
+          .withBearerToken(owner)
+          .withMultiPartFormData("photo", await cleanJpeg(), {
+            filename: "trip.jpg",
+            contentType: "image/jpeg",
+          })
+          .expectStatus(201)
+          .returns("res.body"),
+      );
+
+      await spec()
+        .get(uploaded.url)
+        .withBearerToken(stranger)
+        .expectStatus(404);
+      await spec()
+        .delete(uploaded.url)
+        .withBearerToken(stranger)
+        .expectStatus(404);
+    });
+
+    it("사진을 지우면 상세에서 사라진다", async () => {
+      const created = await createRecord(owner, "사진 삭제");
+      const uploaded = photoSchema.parse(
+        await spec()
+          .post(`/records/${created.id}/days/2026-08-15/photos`)
+          .withBearerToken(owner)
+          .withMultiPartFormData("photo", await cleanJpeg(), {
+            filename: "trip.jpg",
+            contentType: "image/jpeg",
+          })
+          .expectStatus(201)
+          .returns("res.body"),
+      );
+
+      await spec()
+        .delete(uploaded.url)
+        .withBearerToken(owner)
+        .expectStatus(204);
+      await spec()
+        .delete(uploaded.url)
+        .withBearerToken(owner)
+        .expectStatus(404);
+
+      const detail = detailSchema.parse(
+        await spec()
+          .get(`/records/${created.id}`)
+          .withBearerToken(owner)
+          .expectStatus(200)
+          .returns("res.body"),
+      );
+      expect(detail.days).toEqual([]);
+    });
   });
 
   it("전체 초기화는 내 기록만 지운다", async () => {

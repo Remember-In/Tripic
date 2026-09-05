@@ -2,7 +2,7 @@
 
 | 항목 | 내용                                                                                                     |
 | ---- | -------------------------------------------------------------------------------------------------------- |
-| 상태 | **콘텐츠 API 구현 완료** (Prisma 어댑터) · 사진·AI 생성은 미구현 · 방문 관광지는 검토 대기               |
+| 상태 | **콘텐츠 + 사진 API 구현 완료** (Prisma 어댑터) · AI 생성은 미구현 · 방문 관광지는 검토 대기             |
 | 근거 | [10-auth-db-design.md](./10-auth-db-design.md) §4·§9, Figma 기록 생성 / AI 기록 생성 설정 / 내 여행 기록 |
 | 범위 | 기록의 **콘텐츠 부분만** — 제목·테마·문체·해시태그·날짜별 일기                                           |
 | 제외 | 방문 관광지(record_places) API — **위치정보지원센터 사전 검토 후** 별도 설계·노출 (§6)                   |
@@ -50,15 +50,15 @@ Phase 1의 목적: 모바일이 안정된 계약으로 즉시 개발을 시작�
 | DELETE | `/records`                                | 204  | **내 기록 전체 즉시 영구 삭제** (설정 "전체 기록 초기화" 대응 — 확인 UX는 앱 책임) |
 | PUT    | `/records/:id/days/:date/entry`           | 200  | 날짜별 일기 작성/수정 (upsert)                                                     |
 | DELETE | `/records/:id/days/:date/entry`           | 204  | 날짜별 일기 **즉시 영구 삭제**                                                     |
-| POST   | `/records/:id/days/:date/photos`          | 201  | 해당 일차에 EXIF 제거 사본 사진 업로드 (§3.1) — **미구현**                         |
+| POST   | `/records/:id/days/:date/photos`          | 201  | 해당 일차에 EXIF 제거 사본 사진 업로드 (§3.1)                                      |
 | GET    | `/records/:id/days/:date/photos/:photoId` | 200  | 사진 바이너리 서빙                                                                 |
 | DELETE | `/records/:id/days/:date/photos/:photoId` | 204  | 사진 **즉시 영구 삭제**                                                            |
 
 URL은 **일차(day) 기준**으로 통일한다 — 일기(entry)와 사진(photos)은 형제 관계이므로 둘 다
 `/days/:date` 아래에 둔다 (상세 응답의 `days[]` 구조와 1:1).
 
-사진 3종을 제외한 나머지는 모두 구현돼 동작한다. 사진이 없는 동안 상세 응답의
-`days[].photos` 는 항상 빈 배열이며, 일차는 일기가 있는 날짜로만 만들어진다.
+AI 일기 생성(§3.2)을 제외한 나머지는 모두 구현돼 동작한다. 상세 응답의 일차는 **일기와 사진의
+날짜를 합집합**으로 만들어지므로 사진만 있는 일차도 나온다 (그때 `entry` 는 null).
 
 **삭제 정책 — 전면 hard delete**: 기록·일기·사진은 물론 **회원 탈퇴를 포함해 모든 삭제는
 지체 없는 물리 삭제**다 (PRD "삭제된 기록은 복구하지 않는다" 및 개인정보보호법의 지체 없는
@@ -164,7 +164,19 @@ URL은 **일차(day) 기준**으로 통일한다 — 일기(entry)와 사진(pho
 기록이 아니라 **일차(날짜) 소속**이다. 다만 일기 없이 사진만 있는 일차가 존재하므로 사진은
 entry FK가 아닌 **(recordId, date)를 직접 갖는다** — entry와 date를 공유하는 형제 관계
 (`UNIQUE(recordId, date)` 제약은 entry에만 적용). 스키마: `record_photos(id, recordId FK,
-date, data bytea, mimeType, size, createdAt)` — 구현 브랜치에서 마이그레이션.
+date, data bytea, mimeType, size, createdAt)` — 마이그레이션 `add_record_photos` 로 반영 완료.
+
+**구현 결과 (확정 수치)**:
+
+- 업로드는 `multipart/form-data` 의 `photo` 필드. 스트림 단계에서 **1MB** 로 자른다.
+- 검증은 sharp(libvips) 로 실제 디코딩해 포맷(jpeg/webp)·크기를 확인하고,
+  `exif`·`xmp`·`iptc`·`icc` 가 하나라도 있으면 **400**(`photo rejected: HAS_METADATA`).
+- 디코딩 폭탄 방어는 `limitInputPixels`(4096×4096) + 변 길이 4096px 제한.
+- 할당량: 파일당 1MB, **기록당 20장**, **사용자 총 100MB** — 초과 시 **413**.
+  할당량은 디코딩 **전에** 검사해 한도 초과 요청에 CPU 를 쓰지 않는다.
+- 서빙은 `Content-Type` + `X-Content-Type-Options: nosniff` + `Cache-Control: private, max-age=300`.
+  Bearer 인증이 필요하므로 앱은 `<img src>` 가 아니라 fetch 로 받아 렌더링한다.
+- 상세 응답은 사진 바이트를 싣지 않는다 — `id` 와 서빙 `url` 만 내려간다.
 
 - **클라이언트**: 디코드 → 리사이즈 → **재인코딩**으로 업로드 사본 생성 — 재인코딩은 EXIF를
   구조적으로 소멸시켜 "제거 누락" 결함을 원천 차단한다.
