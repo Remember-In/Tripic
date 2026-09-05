@@ -11,11 +11,7 @@
  *   단 아래의 `import type` 은 컴파일 시 완전히 지워져 번들 대상에 남지 않으므로 안전하다.
  */
 
-import type {
-  DiaryStyle,
-  EntrySource,
-  RecordTheme,
-} from "../schemas/records.js";
+import type { DiaryStyle, EntrySource, RecordTheme } from "../schemas/records";
 
 /** 방문지 매칭 방식 (PRD 6.5) */
 export type MatchMethod =
