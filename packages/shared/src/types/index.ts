@@ -5,10 +5,8 @@
  * - 이 타입들은 앱/서버가 공유하는 "계약(contract)"이다.
  * - 관광공사 OpenAPI 원천 데이터(관광지명/주소/소개/이미지 등)는 저장 대상이 아니므로
  *   여기서 모델링하지 않는다. (PRD 6.3 / 12.2 준수)
- * - 하위 파일로 쪼개지 않는다: React Native 진입점(src/react-native.js)이 이 파일을
- *   확장자 없이 번들하는데, Metro 는 NodeNext 용 `.js` specifier 를 .ts 원본으로
- *   되돌려 찾지 못한다 (여기서 상대 re-export 를 하면 모바일 번들이 깨진다).
- *   단 아래의 `import type` 은 컴파일 시 완전히 지워져 번들 대상에 남지 않으므로 안전하다.
+ * - 상대 경로에 확장자를 붙이지 않는다: 이 패키지는 CommonJS 로 빌드해 서버(Node)와
+ *   모바일(Metro) 양쪽이 같은 소스 규칙을 쓰도록 맞췄다.
  */
 
 import type { DiaryStyle, EntrySource, RecordTheme } from "../schemas/records";
@@ -159,7 +157,7 @@ export interface RecordDay {
   /** `YYYY-MM-DD` */
   date: string;
   entry: RecordEntry | null;
-  /** 사진 업로드(docs/11 §3.1) 구현 전까지는 항상 빈 배열 */
+  /** 해당 일차의 사진 — 바이트가 아니라 서빙 경로만 담긴다 (docs/11 §3.1) */
   photos: RecordPhoto[];
 }
 
