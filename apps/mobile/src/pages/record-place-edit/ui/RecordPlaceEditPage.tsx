@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 
+import { DEFAULT_APP_CONFIG, useAppConfigQuery } from "@/entities/app-config";
 import {
   browseTouristPlacesByArea,
   searchTouristPlaces,
@@ -71,6 +72,8 @@ function validationMessage(date: string) {
 
 export function RecordPlaceEditPage() {
   const router = useRouter();
+  const appConfigQuery = useAppConfigQuery();
+  const appConfig = appConfigQuery.data ?? DEFAULT_APP_CONFIG;
   const params = useLocalSearchParams<{
     recordId?: string | string[];
     visitId?: string | string[];
@@ -114,23 +117,43 @@ export function RecordPlaceEditPage() {
   }, [context]);
 
   const searchQuery = useQuery({
-    enabled: isKeywordMode && isKeywordReady,
+    enabled: !appConfigQuery.isPending && isKeywordMode && isKeywordReady,
     gcTime: 0,
-    queryFn: ({ signal }) => searchTouristPlaces(debouncedQuery, signal),
-    queryKey: touristPlaceQueryKeys.search(debouncedQuery),
+    queryFn: ({ signal }) =>
+      searchTouristPlaces(debouncedQuery, {
+        maxCandidates: appConfig.kto.maxCandidates,
+        signal,
+      }),
+    queryKey: touristPlaceQueryKeys.search(
+      debouncedQuery,
+      appConfig.kto.maxCandidates,
+    ),
     retry: 1,
     staleTime: 0,
   });
   const areaQuery = useQuery({
-    enabled: selectedAreaCode !== undefined && !isKeywordMode,
+    enabled:
+      !appConfigQuery.isPending &&
+      selectedAreaCode !== undefined &&
+      !isKeywordMode,
     gcTime: 0,
     queryFn: ({ signal }) =>
-      browseTouristPlacesByArea(selectedAreaCode ?? undefined, signal),
-    queryKey: touristPlaceQueryKeys.area(selectedAreaCode ?? undefined),
+      browseTouristPlacesByArea({
+        areaCode: selectedAreaCode ?? undefined,
+        maxCandidates: appConfig.kto.maxCandidates,
+        signal,
+      }),
+    queryKey: touristPlaceQueryKeys.area(
+      selectedAreaCode ?? undefined,
+      appConfig.kto.maxCandidates,
+    ),
     retry: 1,
     staleTime: 0,
   });
   const activeQuery = isKeywordMode ? searchQuery : areaQuery;
+  const isSearchPreparing =
+    appConfigQuery.isPending &&
+    (isKeywordMode ? isKeywordReady : selectedAreaCode !== undefined);
   const candidates = activeQuery.data ?? [];
   const selectedRegion = getRegionByAreaCode(selectedAreaCode);
   const browseRegionLabel = selectedRegion?.shortName ?? "전체 지역";
@@ -330,7 +353,7 @@ export function RecordPlaceEditPage() {
                 <SearchState message="장소명을 두 글자 이상 입력해 주세요." />
               ) : isKeywordMode && !isKeywordReady ? (
                 <SearchState loading message="검색어를 확인하고 있어요." />
-              ) : activeQuery.isFetching ? (
+              ) : isSearchPreparing || activeQuery.isFetching ? (
                 <SearchState
                   loading
                   message={

@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 
+import { DEFAULT_APP_CONFIG, useAppConfigQuery } from "@/entities/app-config";
 import { getRegionByAreaCode, type KtoAreaCode } from "@/entities/region";
 import {
   browseTouristPlacesByArea,
@@ -31,6 +32,7 @@ import {
 } from "@/shared/config/theme";
 import { AppText, PageHeader, PrimaryButton, Screen } from "@/shared/ui";
 
+import { canStartNearbySearch } from "../model/nearbySearch";
 import { VisitDateSheet } from "./VisitDateSheet";
 
 const monthNames = [
@@ -133,6 +135,8 @@ function emptyNearbyPlacesState(photoId: string): NearbyPlacesState {
 
 export function PhotoInfoPage() {
   const router = useRouter();
+  const appConfigQuery = useAppConfigQuery();
+  const appConfig = appConfigQuery.data ?? DEFAULT_APP_CONFIG;
   const {
     discardTransientGps,
     locationSearchDecision,
@@ -160,13 +164,20 @@ export function PhotoInfoPage() {
   useEffect(() => {
     const latitude = coordinates?.latitude;
     const longitude = coordinates?.longitude;
+    const searchCoordinates =
+      latitude !== undefined && longitude !== undefined
+        ? { latitude, longitude }
+        : null;
 
     if (
-      locationSearchDecision !== "nearby" ||
-      isKeywordMode ||
-      selectedAreaCode !== undefined ||
-      latitude === undefined ||
-      longitude === undefined
+      !canStartNearbySearch({
+        hasCoordinates: searchCoordinates !== null,
+        isAppConfigPending: appConfigQuery.isPending,
+        isKeywordMode,
+        locationSearchDecision,
+        selectedAreaCode,
+      }) ||
+      !searchCoordinates
     ) {
       setNearbyPlaces((current) => {
         if (current.photoId !== photoId) {
@@ -186,7 +197,10 @@ export function PhotoInfoPage() {
       places: [],
     });
 
-    void findNearbyTouristPlaces({ latitude, longitude }, controller.signal)
+    void findNearbyTouristPlaces(searchCoordinates, {
+      ...appConfig.kto,
+      signal: controller.signal,
+    })
       .then((places) => {
         if (active) {
           setNearbyPlaces({
@@ -211,15 +225,20 @@ export function PhotoInfoPage() {
         }
       })
       .finally(() => {
-        discardTransientGps(photoId);
+        if (active) {
+          discardTransientGps(photoId);
+        }
       });
 
     return () => {
       active = false;
       controller.abort();
-      discardTransientGps(photoId);
     };
   }, [
+    appConfig.kto.defaultRadiusM,
+    appConfig.kto.maxCandidates,
+    appConfig.kto.maxRadiusM,
+    appConfigQuery.isPending,
     coordinates?.latitude,
     coordinates?.longitude,
     discardTransientGps,
@@ -229,21 +248,61 @@ export function PhotoInfoPage() {
     selectedAreaCode,
   ]);
 
+  useEffect(
+    () => () => {
+      discardTransientGps(photoId);
+    },
+    [discardTransientGps, photoId],
+  );
+
+  useEffect(() => {
+    if (
+      locationSearchDecision !== "nearby" ||
+      isKeywordMode ||
+      selectedAreaCode !== undefined
+    ) {
+      discardTransientGps(photoId);
+    }
+  }, [
+    discardTransientGps,
+    isKeywordMode,
+    locationSearchDecision,
+    photoId,
+    selectedAreaCode,
+  ]);
+
   const searchQuery = useQuery({
-    enabled: isKeywordMode && isKeywordReady,
+    enabled: !appConfigQuery.isPending && isKeywordMode && isKeywordReady,
     gcTime: 0,
-    queryFn: ({ signal }) => searchTouristPlaces(debouncedQuery, signal),
-    queryKey: touristPlaceQueryKeys.search(debouncedQuery),
+    queryFn: ({ signal }) =>
+      searchTouristPlaces(debouncedQuery, {
+        maxCandidates: appConfig.kto.maxCandidates,
+        signal,
+      }),
+    queryKey: touristPlaceQueryKeys.search(
+      debouncedQuery,
+      appConfig.kto.maxCandidates,
+    ),
     retry: 1,
     staleTime: 0,
   });
 
   const areaQuery = useQuery({
-    enabled: selectedAreaCode !== undefined && !isKeywordMode,
+    enabled:
+      !appConfigQuery.isPending &&
+      selectedAreaCode !== undefined &&
+      !isKeywordMode,
     gcTime: 0,
     queryFn: ({ signal }) =>
-      browseTouristPlacesByArea(selectedAreaCode ?? undefined, signal),
-    queryKey: touristPlaceQueryKeys.area(selectedAreaCode ?? undefined),
+      browseTouristPlacesByArea({
+        areaCode: selectedAreaCode ?? undefined,
+        maxCandidates: appConfig.kto.maxCandidates,
+        signal,
+      }),
+    queryKey: touristPlaceQueryKeys.area(
+      selectedAreaCode ?? undefined,
+      appConfig.kto.maxCandidates,
+    ),
     retry: 1,
     staleTime: 0,
   });
@@ -279,10 +338,13 @@ export function PhotoInfoPage() {
 
   const isRegionBrowse = !isKeywordMode && selectedAreaCode !== undefined;
   const isFetching = isKeywordMode
-    ? keyword.length >= 2 && (!isKeywordReady || searchQuery.isFetching)
+    ? keyword.length >= 2 &&
+      (appConfigQuery.isPending || !isKeywordReady || searchQuery.isFetching)
     : isRegionBrowse
-      ? areaQuery.isFetching
-      : nearbyPlaces.isFetching;
+      ? appConfigQuery.isPending || areaQuery.isFetching
+      : locationSearchDecision === "nearby" && coordinates
+        ? appConfigQuery.isPending || nearbyPlaces.isFetching
+        : nearbyPlaces.isFetching;
   const activeError = isKeywordMode
     ? isKeywordReady
       ? searchQuery.error

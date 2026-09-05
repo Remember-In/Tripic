@@ -1,6 +1,9 @@
 export {
   APP_CONFIG_QUERY_KEY,
+  APP_CONFIG_REQUEST_TIMEOUT_MS,
+  AppConfigTimeoutError,
   getAppConfig,
+  getAppConfigOrDefault,
   useAppConfigQuery,
 } from "./api/appConfigApi";
 export {

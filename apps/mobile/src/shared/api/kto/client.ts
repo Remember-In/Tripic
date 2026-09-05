@@ -2,17 +2,15 @@ import type {
   KtoArea,
   KtoAreaSearchInput,
   KtoImage,
+  KtoListRequestOptions,
   KtoListItem,
   KtoPlaceDetail,
+  KtoRequestOptions,
 } from "./types";
+import { MAX_KTO_LIST_CANDIDATES, MAX_KTO_RADIUS_METERS } from "./types";
 
 const KTO_BASE_URL = "https://apis.data.go.kr/B551011/KorService2";
 const DEFAULT_TIMEOUT_MS = 10_000;
-
-type KtoRequestOptions = {
-  signal?: AbortSignal;
-  timeoutMs?: number;
-};
 
 type UnknownRecord = Readonly<Record<string, unknown>>;
 
@@ -54,6 +52,19 @@ function optionalString(value: unknown) {
 function optionalNumber(value: unknown) {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function candidateLimit(value: number | undefined) {
+  const positiveValue =
+    Number.isSafeInteger(value) && (value as number) > 0
+      ? (value as number)
+      : 5;
+  return Math.min(positiveValue, MAX_KTO_LIST_CANDIDATES);
+}
+
+function nearbyRadiusMeters(value: number) {
+  const integerValue = Number.isFinite(value) ? Math.trunc(value) : 1;
+  return Math.min(Math.max(integerValue, 1), MAX_KTO_RADIUS_METERS);
 }
 
 function parseListItem(value: unknown): KtoListItem | null {
@@ -190,17 +201,18 @@ export async function fetchNearbyKtoPlaces(
     longitude: number;
     radiusMeters: number;
   },
-  options?: KtoRequestOptions,
+  options?: KtoListRequestOptions,
 ) {
+  const maxCandidates = candidateLimit(options?.maxCandidates);
   const items = await requestKto(
     "locationBasedList2",
     {
       arrange: "E",
       mapX: input.longitude,
       mapY: input.latitude,
-      numOfRows: 5,
+      numOfRows: maxCandidates,
       pageNo: 1,
-      radius: input.radiusMeters,
+      radius: nearbyRadiusMeters(input.radiusMeters),
     },
     options,
   );
@@ -213,24 +225,25 @@ export async function fetchNearbyKtoPlaces(
         (left.distanceMeters ?? Number.MAX_SAFE_INTEGER) -
         (right.distanceMeters ?? Number.MAX_SAFE_INTEGER),
     )
-    .slice(0, 5);
+    .slice(0, maxCandidates);
 }
 
 export async function searchKtoPlaces(
   keyword: string,
-  options?: KtoRequestOptions,
+  options?: KtoListRequestOptions,
 ) {
   const normalizedKeyword = keyword.trim();
   if (!normalizedKeyword) {
     return [];
   }
 
+  const maxCandidates = candidateLimit(options?.maxCandidates);
   const items = await requestKto(
     "searchKeyword2",
     {
       arrange: "A",
       keyword: normalizedKeyword,
-      numOfRows: 5,
+      numOfRows: maxCandidates,
       pageNo: 1,
     },
     options,
@@ -239,19 +252,20 @@ export async function searchKtoPlaces(
   return items
     .map(parseListItem)
     .filter((item): item is KtoListItem => Boolean(item))
-    .slice(0, 5);
+    .slice(0, maxCandidates);
 }
 
 export async function fetchKtoPlacesByArea(
   input: KtoAreaSearchInput = {},
-  options?: KtoRequestOptions,
+  options?: KtoListRequestOptions,
 ) {
+  const maxCandidates = candidateLimit(options?.maxCandidates);
   const items = await requestKto(
     "areaBasedList2",
     {
       areaCode: input.areaCode?.trim(),
       arrange: "A",
-      numOfRows: 5,
+      numOfRows: maxCandidates,
       pageNo: 1,
       sigunguCode: input.sigunguCode?.trim(),
     },
@@ -261,7 +275,7 @@ export async function fetchKtoPlacesByArea(
   return items
     .map(parseListItem)
     .filter((item): item is KtoListItem => Boolean(item))
-    .slice(0, 5);
+    .slice(0, maxCandidates);
 }
 
 export async function fetchKtoPlaceDetail(
