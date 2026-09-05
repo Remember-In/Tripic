@@ -3,12 +3,12 @@
   "version": "0.0.0",
   "description": "Tripic 공통 타입/상수 (앱·서버 공유 계약)",
   "private": true,
-  "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./src/index.ts",
+      "react-native": "./src/index.ts",
       "default": "./dist/index.js"
     }
   },

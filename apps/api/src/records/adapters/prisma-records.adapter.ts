@@ -1,12 +1,15 @@
 import { Injectable } from "@nestjs/common";
-import type { RecordDetail, RecordSummary } from "@tripic/shared";
+import type { RecordDay, RecordDetail, RecordSummary } from "@tripic/shared";
 import { PrismaService } from "@/prisma/prisma.service";
 import type {
   NewEntry,
+  NewPhoto,
   NewRecord,
+  PhotoUsage,
   RecordPatch,
   RecordsRepository,
   StoredEntry,
+  StoredPhoto,
 } from "@/records/ports/records-repository.port";
 import type { Record as RecordRow } from "@/generated/prisma/client";
 
@@ -14,9 +17,15 @@ import type { Record as RecordRow } from "@/generated/prisma/client";
 const toDate = (day: string): Date => new Date(`${day}T00:00:00.000Z`);
 const toDay = (date: Date): string => date.toISOString().slice(0, 10);
 
-interface EntryDate {
+interface DayRow {
   date: Date;
 }
+
+/** 요약 계산에 필요한 날짜만 읽는다 — 사진 바이트(bytea)는 절대 싣지 않는다 */
+const dayColumns = {
+  entries: { select: { date: true } },
+  photos: { select: { date: true } },
+};
 
 @Injectable()
 export class PrismaRecordsAdapter implements RecordsRepository {
@@ -32,20 +41,20 @@ export class PrismaRecordsAdapter implements RecordsRepository {
         hashtags: record.hashtags,
       },
     });
-    return this.toSummary(created, []);
+    return this.toSummary(created, [], []);
   }
 
   async listByUser(userId: string): Promise<RecordSummary[]> {
     const rows = await this.prisma.record.findMany({
       where: { userId },
-      include: { entries: { select: { date: true } } },
+      include: dayColumns,
     });
 
     // 여행일 기준 최근순 — endDate 내림차순, 없으면 createdAt 으로 대체 (docs/11 §3).
     // 정렬 키가 행마다 달라 SQL ORDER BY 로 표현하기 어려우므로 여기서 정렬한다
     // (기록 수가 문제되면 endDate 를 컬럼으로 승격하고 페이지네이션을 도입한다).
     return rows
-      .map((row) => this.toSummary(row, row.entries))
+      .map((row) => this.toSummary(row, row.entries, row.photos))
       .sort((left, right) =>
         (right.endDate ?? right.createdAt).localeCompare(
           left.endDate ?? left.createdAt,
@@ -59,9 +68,40 @@ export class PrismaRecordsAdapter implements RecordsRepository {
   ): Promise<RecordDetail | null> {
     const row = await this.prisma.record.findFirst({
       where: { id: recordId, userId },
-      include: { entries: { orderBy: { date: "asc" } } },
+      include: {
+        entries: { orderBy: { date: "asc" } },
+        // 목록 응답에 바이트는 필요 없다 — id 와 날짜만 읽는다
+        photos: { select: { id: true, date: true }, orderBy: { id: "asc" } },
+      },
     });
     if (!row) return null;
+
+    // 일기와 사진은 날짜를 공유하는 형제 관계 — 한쪽만 있는 일차도 존재한다
+    const days = new Map<string, RecordDay>();
+    const dayOf = (date: Date): RecordDay => {
+      const key = toDay(date);
+      const existing = days.get(key);
+      if (existing) return existing;
+      const created: RecordDay = { date: key, entry: null, photos: [] };
+      days.set(key, created);
+      return created;
+    };
+
+    for (const entry of row.entries) {
+      dayOf(entry.date).entry = {
+        content: entry.content,
+        source: entry.source,
+        createdAt: entry.createdAt.toISOString(),
+        updatedAt: entry.updatedAt.toISOString(),
+      };
+    }
+    for (const photo of row.photos) {
+      const day = dayOf(photo.date);
+      day.photos.push({
+        id: photo.id,
+        url: `/records/${row.id}/days/${day.date}/photos/${photo.id}`,
+      });
+    }
 
     return {
       id: row.id,
@@ -69,17 +109,9 @@ export class PrismaRecordsAdapter implements RecordsRepository {
       theme: row.theme,
       style: row.style,
       hashtags: row.hashtags,
-      days: row.entries.map((entry) => ({
-        date: toDay(entry.date),
-        entry: {
-          content: entry.content,
-          source: entry.source,
-          createdAt: entry.createdAt.toISOString(),
-          updatedAt: entry.updatedAt.toISOString(),
-        },
-        // 사진 업로드(docs/11 §3.1) 구현 전까지는 항상 비어 있다
-        photos: [],
-      })),
+      days: [...days.values()].sort((left, right) =>
+        left.date.localeCompare(right.date),
+      ),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
@@ -99,9 +131,9 @@ export class PrismaRecordsAdapter implements RecordsRepository {
 
     const row = await this.prisma.record.findFirstOrThrow({
       where: { id: recordId, userId },
-      include: { entries: { select: { date: true } } },
+      include: dayColumns,
     });
-    return this.toSummary(row, row.entries);
+    return this.toSummary(row, row.entries, row.photos);
   }
 
   async delete(userId: string, recordId: string): Promise<boolean> {
@@ -159,15 +191,115 @@ export class PrismaRecordsAdapter implements RecordsRepository {
     return count > 0;
   }
 
-  private toSummary(row: RecordRow, entries: EntryDate[]): RecordSummary {
-    const days = entries.map((entry) => toDay(entry.date)).sort();
+  async photoUsage(
+    userId: string,
+    recordId: string,
+  ): Promise<PhotoUsage | null> {
+    const owned = await this.prisma.record.findFirst({
+      where: { id: recordId, userId },
+      select: { id: true },
+    });
+    if (!owned) return null;
+
+    const [recordPhotoCount, userTotal] = await Promise.all([
+      this.prisma.recordPhoto.count({ where: { recordId } }),
+      // data 를 읽지 않고 size 컬럼만 합산한다
+      this.prisma.recordPhoto.aggregate({
+        where: { record: { userId } },
+        _sum: { size: true },
+      }),
+    ]);
+
+    return {
+      recordPhotoCount,
+      userTotalBytes: userTotal._sum.size ?? 0,
+    };
+  }
+
+  async addPhoto(
+    userId: string,
+    recordId: string,
+    date: string,
+    photo: NewPhoto,
+  ): Promise<string | null> {
+    const owned = await this.prisma.record.findFirst({
+      where: { id: recordId, userId },
+      select: { id: true },
+    });
+    if (!owned) return null;
+
+    const created = await this.prisma.recordPhoto.create({
+      data: {
+        recordId,
+        date: toDate(date),
+        // Prisma 의 Bytes 는 Uint8Array 를 받는다 — 복사 없이 같은 메모리를 가리키게 감싼다
+        data: new Uint8Array(
+          photo.data.buffer,
+          photo.data.byteOffset,
+          photo.data.byteLength,
+        ),
+        mimeType: photo.mimeType,
+        size: photo.size,
+      },
+      select: { id: true },
+    });
+    return created.id;
+  }
+
+  async findPhoto(
+    userId: string,
+    recordId: string,
+    date: string,
+    photoId: string,
+  ): Promise<StoredPhoto | null> {
+    const row = await this.prisma.recordPhoto.findFirst({
+      where: {
+        id: photoId,
+        recordId,
+        date: toDate(date),
+        record: { userId },
+      },
+    });
+    if (!row) return null;
+    return {
+      // copyBytesFrom 은 ArrayBuffer 백업 Buffer 를 보장한다 (StreamableFile 타입 요구)
+      id: row.id,
+      data: Buffer.copyBytesFrom(row.data),
+      mimeType: row.mimeType,
+    };
+  }
+
+  async deletePhoto(
+    userId: string,
+    recordId: string,
+    date: string,
+    photoId: string,
+  ): Promise<boolean> {
+    const { count } = await this.prisma.recordPhoto.deleteMany({
+      where: {
+        id: photoId,
+        recordId,
+        date: toDate(date),
+        record: { userId },
+      },
+    });
+    return count > 0;
+  }
+
+  /** 날짜 범위는 일기와 사진을 합쳐서 잡고, entryCount 는 일기 수만 센다 (docs/11 §3) */
+  private toSummary(
+    row: RecordRow,
+    entries: DayRow[],
+    photos: DayRow[],
+  ): RecordSummary {
+    const days = [...entries, ...photos].map((row) => toDay(row.date)).sort();
     return {
       id: row.id,
       title: row.title,
       theme: row.theme,
       style: row.style,
       hashtags: row.hashtags,
-      entryCount: days.length,
+      entryCount: entries.length,
       startDate: days.at(0) ?? null,
       endDate: days.at(-1) ?? null,
       createdAt: row.createdAt.toISOString(),

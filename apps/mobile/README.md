@@ -1,27 +1,88 @@
-# @tripic/mobile (placeholder)
+# @tripic/mobile
 
-React Native 모바일 앱 자리입니다. **이번 백엔드 우선 세팅 단계에서는 스캐폴딩하지 않았습니다.**
+Expo Router 기반 Tripic 모바일 앱입니다.
 
-## 예정 스택 (PRD 10.2)
+아키텍처와 import 기준은 [모바일 개발 규칙](./DEVELOPMENT_RULES.md)을 따릅니다.
 
-- React Native + Expo + Expo Router
-- TypeScript
-- TanStack Query — 한국관광공사 OpenAPI 호출의 loading/error/retry 관리
-- Expo SQLite — 방문 기록 로컬 저장
-- Zustand (선택) — 선택 사진·임시 작성 상태
-
-## 책임 범위 (PRD 6.2 / 16)
-
-- 사진 EXIF의 GPS·촬영일시는 **앱 내부에서만** 처리한다.
-- 관광지 후보/상세 조회는 앱이 **한국관광공사 OpenAPI를 직접 호출**한다.
-- GPS 좌표·EXIF 원본 사진을 백엔드 서버로 전송하지 않는다.
-- 관광공사 원천 데이터를 로컬 DB에 저장/캐싱 서빙하지 않는다.
-
-## 스캐폴딩 시 (예정)
+## 실행
 
 ```bash
-# 예시 — 추후 확정
-pnpm create expo-app apps/mobile
+pnpm install
+pnpm --filter @tripic/mobile start
+pnpm --filter @tripic/mobile ios
+pnpm --filter @tripic/mobile android
 ```
 
-상세 화면/플로우는 [docs/05-screens.md](../../docs/05-screens.md), [docs/03-requirements-p0.md](../../docs/03-requirements-p0.md) 참고.
+## 서버·TourAPI·카카오 로그인 환경 설정
+
+`.env.example`을 참고해 로컬 전용 `.env.local`을 만든다.
+
+```bash
+cp apps/mobile/.env.example apps/mobile/.env.local
+```
+
+- `EXPO_PUBLIC_API_BASE_URL`: Tripic API 주소. 실기기에서는 `localhost`가 기기 자신을
+  가리키므로 HTTPS 운영 주소 또는 같은 네트워크에서 접근 가능한 Mac 주소를 사용한다.
+- `EXPO_PUBLIC_KTO_SERVICE_KEY`: 공공데이터포털에서 발급한 한국관광공사 TourAPI 일반
+  인증키. 디코딩 값을 권장하며, 앱 번들에 포함되는 공개 설정이므로 서버 비밀키를 넣지 않는다.
+- `EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY`: Kakao Developers의 네이티브 앱 키. 공개 식별자이며
+  REST API 키, Admin 키, 서버 secret을 넣지 않는다.
+
+Kakao Developers의 같은 애플리케이션에 iOS 번들 ID `com.tripic.app`과 Android 패키지
+`com.tripic.app`을 등록한다. Android 실기기는 EAS 서명 인증서의 키 해시도 등록해야 한다.
+서버의 `KAKAO_APP_ID`는 이 네이티브 앱 키가 속한 Kakao 애플리케이션의 숫자 앱 ID와
+일치해야 한다. 네이티브 설정 절차는
+[React Native Kakao Expo 설정 문서](https://rnkakao.mjstudio.net/docs/install-expo)를 따른다.
+
+카카오 로그인은 네이티브 SDK를 사용하므로 Expo Go에서는 실행되지 않는다. 환경 변수를
+설정한 뒤 Development Build 또는 TestFlight 바이너리를 새로 빌드해야 config plugin이
+적용된다. API base URL은 Expo public 환경 변수이므로 앱 바이너리에 포함된다는 점도
+전제로 한다.
+
+원격 EAS Build는 gitignore 된 `.env.local`을 받지 못하므로 EAS 프로젝트의
+`development`·`preview`·`production` 환경에도 세 값을 등록한다. `eas.json`의 각 빌드
+프로필은 같은 이름의 EAS 환경을 명시적으로 사용한다. 세 값 모두 앱 번들에 포함되는 공개
+설정이며 서버 secret을 넣으면 안 된다.
+
+```bash
+cd apps/mobile
+npx eas-cli@latest env:set --name EXPO_PUBLIC_API_BASE_URL --value https://api.example.com --environment preview --visibility plaintext
+npx eas-cli@latest env:set --name EXPO_PUBLIC_KTO_SERVICE_KEY --value replace-with-data-go-kr-service-key --environment preview --visibility plaintext
+npx eas-cli@latest env:set --name EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY --value replace-with-kakao-native-app-key --environment preview --visibility plaintext
+npx eas-cli@latest env:list --environment preview
+```
+
+TestFlight용 `production` 빌드에는 위 명령의 환경만 `production`으로 바꿔 동일하게 등록한다.
+대시보드에서는 Project settings → Environment variables에서도 관리할 수 있다. 자세한 기준은
+[Expo EAS 환경 변수 문서](https://docs.expo.dev/eas/environment-variables/manage/)를 따른다.
+
+현재 모바일 앱은 서버의 카카오 토큰 교환, 세션 갱신·로그아웃, 내 프로필 조회·닉네임 변경,
+회원 탈퇴와 운영 정보 API를 사용한다. 회원 탈퇴가 성공하면 운영 데이터베이스의 계정 연관
+데이터는 즉시 물리 삭제되고, 앱은 해당 계정의 로컬 기록을 삭제한 뒤 남은 사진 정리 작업을
+다음 실행에도 재시도한다. 서버 백업 사본의 보관·파기 정책은 공개 정책의 출시 전 확인
+항목으로 남아 있다.
+
+서버 코드에는 기록 콘텐츠 CRUD가 있지만 현재 계약은 제목·테마·스타일·해시태그·날짜별
+메모만 다루며, 모바일 로컬 기록의 사진·방문 장소·지역 코드·TourAPI 표시 데이터는 포함하지
+않는다. 원격 ID 매핑, 오프라인 재시도, 충돌 병합과 마이그레이션 정책 없이 연결하면 부분
+동기화나 데이터 손실이 생길 수 있으므로 모바일은 아직 SQLite 로컬 기록을 단일 원본으로
+유지한다. 사진 업로드·AI 일기·서버 기반 방문 진행도 API도 준비되기 전까지 호출하지 않는다.
+
+## 구성
+
+- `app/` — Expo Router route·layout·Provider 연결
+- `src/pages/` — 화면 조합
+- `src/widgets/` — 지도·일정·기록 편집기 등 큰 UI 블록
+- `src/features/` — 인증 세션·카카오 로그인·기록 생성 세션 등 사용자 행동
+- `src/entities/` — 사용자·운영 설정·여행 기록 계약과 표시 데이터
+- `src/shared/` — 디자인 토큰·공용 UI·로컬 자산
+- `src/shared/api/kto/` — 한국관광공사 OpenAPI 직접 호출 경계
+- `src/shared/lib/storage/` — Expo SQLite 로컬 방문 기록 저장소
+
+색상·타이포·간격·공용 컴포넌트 기준은 [디자인 시스템](./DESIGN_SYSTEM.md)에 정리했습니다.
+
+사진 EXIF GPS와 원본 사진은 Tripic 서버 또는 SQLite에 저장하지 않습니다. 위치 기반 후보 조회를 실행하면 GPS 좌표만 한국관광공사 OpenAPI로 직접 전송하며, OpenAPI 응답은 영구 저장하지 않고 화면 표시에만 사용합니다.
+
+Expo Go에서도 사진 선택, TourAPI 장소 검색, 로컬 기록 생성·수정·삭제와 지도 진행도를 확인할
+수 있습니다. 카카오 로그인만 네이티브 모듈이 포함된 Development Build 또는 TestFlight가
+필요합니다.

@@ -42,6 +42,31 @@ export interface StoredEntry {
 }
 
 /**
+ * 저장할 사진 — 검증을 통과한 바이트만 넘어온다.
+ * `Buffer<ArrayBuffer>` 로 좁혀 두면 서빙 시 StreamableFile 에 그대로 넘길 수 있다.
+ */
+export interface NewPhoto {
+  data: Buffer<ArrayBuffer>;
+  mimeType: string;
+  size: number;
+}
+
+/** 서빙용 사진 — 바이너리와 타입 */
+export interface StoredPhoto {
+  id: string;
+  data: Buffer<ArrayBuffer>;
+  mimeType: string;
+}
+
+/** 할당량 검사용 사용량 (docs/11 §3.1) */
+export interface PhotoUsage {
+  /** 해당 기록의 사진 수 */
+  recordPhotoCount: number;
+  /** 사용자 전체 사진의 바이트 합 */
+  userTotalBytes: number;
+}
+
+/**
  * 여행 기록 콘텐츠 영속화 outbound port.
  *
  * 모든 메서드는 **소유권(userId)을 계약에 포함**한다 — 타인의 기록은 존재를 숨기고
@@ -72,4 +97,28 @@ export interface RecordsRepository {
   ): Promise<StoredEntry | null>;
   /** 삭제했으면 true, 기록·일기가 없거나 타인 소유면 false */
   deleteEntry(userId: string, recordId: string, date: string): Promise<boolean>;
+
+  /** 할당량 판단에 필요한 현재 사용량. 기록이 없거나 타인 소유면 null */
+  photoUsage(userId: string, recordId: string): Promise<PhotoUsage | null>;
+  /** 저장 후 사진 id 반환. 기록이 없거나 타인 소유면 null */
+  addPhoto(
+    userId: string,
+    recordId: string,
+    date: string,
+    photo: NewPhoto,
+  ): Promise<string | null>;
+  /** 서빙용 조회. 없거나 타인 소유면 null */
+  findPhoto(
+    userId: string,
+    recordId: string,
+    date: string,
+    photoId: string,
+  ): Promise<StoredPhoto | null>;
+  /** 삭제했으면 true, 없거나 타인 소유면 false */
+  deletePhoto(
+    userId: string,
+    recordId: string,
+    date: string,
+    photoId: string,
+  ): Promise<boolean>;
 }
