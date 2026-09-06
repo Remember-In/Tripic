@@ -5,6 +5,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
@@ -65,63 +66,74 @@ export function NicknamePage() {
     <Screen>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? spacing.lg : 0}
         style={styles.keyboardView}
       >
-        <View style={styles.content}>
-          <View style={styles.heading}>
-            <AppText variant="heading02">어떻게 불러드릴까요?</AppText>
-            <AppText tone="tertiary" variant="body02">
-              Tripic에서 사용할 닉네임을 입력해 주세요.
-            </AppText>
-          </View>
-
-          <View style={styles.fieldGroup}>
-            <TextInput
-              accessibilityLabel="닉네임"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={!isSubmitting}
-              maxLength={20}
-              onChangeText={(value) => {
-                setNickname(value);
-                setValidationMessage(null);
-              }}
-              onSubmitEditing={() => void submitNickname()}
-              placeholder="2~20자"
-              placeholderTextColor={semanticColors.text.disabled}
-              returnKeyType="done"
-              selectionColor={semanticColors.brand.primary}
-              style={styles.input}
-              value={nickname}
-            />
-            {validationMessage ? (
-              <AppText
-                accessibilityLiveRegion="polite"
-                style={styles.validationMessage}
-                variant="caption02"
-              >
-                {validationMessage}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardDismissMode={
+            Platform.OS === "ios" ? "interactive" : "on-drag"
+          }
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+        >
+          <View style={styles.content}>
+            <View style={styles.heading}>
+              <AppText variant="heading02">어떻게 불러드릴까요?</AppText>
+              <AppText tone="tertiary" variant="body02">
+                Tripic에서 사용할 닉네임을 입력해 주세요.
               </AppText>
-            ) : null}
-          </View>
-        </View>
+            </View>
 
-        <PrimaryButton
-          disabled={status !== "authenticated"}
-          label="시작하기"
-          loading={isSubmitting}
-          onPress={() => void submitNickname()}
-          style={styles.button}
-        />
+            <View style={styles.fieldGroup}>
+              <TextInput
+                accessibilityLabel="닉네임"
+                autoCapitalize="none"
+                autoCorrect={false}
+                editable={!isSubmitting}
+                maxLength={20}
+                onChangeText={(value) => {
+                  setNickname(value);
+                  setValidationMessage(null);
+                }}
+                onSubmitEditing={() => void submitNickname()}
+                placeholder="2~20자"
+                placeholderTextColor={semanticColors.text.disabled}
+                returnKeyType="done"
+                selectionColor={semanticColors.brand.primary}
+                style={styles.input}
+                value={nickname}
+              />
+              {validationMessage ? (
+                <AppText
+                  accessibilityLiveRegion="polite"
+                  style={styles.validationMessage}
+                  variant="caption02"
+                >
+                  {validationMessage}
+                </AppText>
+              ) : null}
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.footer}>
+          <PrimaryButton
+            disabled={status !== "authenticated"}
+            label="시작하기"
+            loading={isSubmitting}
+            onPress={() => void submitNickname()}
+          />
+        </View>
       </KeyboardAvoidingView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  button: {
+  footer: {
     marginHorizontal: spacing.md,
-    width: undefined,
   },
   content: {
     flex: 1,
@@ -142,12 +154,19 @@ const styles = StyleSheet.create({
     borderRadius: radii.medium,
     borderWidth: 1,
     color: semanticColors.text.primary,
-    height: 56,
+    minHeight: 56,
     paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   keyboardView: {
     flex: 1,
     paddingBottom: spacing.md,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
+  scrollView: {
+    flex: 1,
   },
   validationMessage: {
     color: semanticColors.feedback.error.level1,
