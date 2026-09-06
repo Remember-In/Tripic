@@ -21,8 +21,8 @@ pnpm --filter @tripic/mobile android
 cp apps/mobile/.env.example apps/mobile/.env.local
 ```
 
-- `EXPO_PUBLIC_API_BASE_URL`: Tripic API 주소. 실기기에서는 `localhost`가 기기 자신을
-  가리키므로 HTTPS 운영 주소 또는 같은 네트워크에서 접근 가능한 Mac 주소를 사용한다.
+- `EXPO_PUBLIC_API_BASE_URL`: 기본 운영 주소는 `https://tripic.remin.dev`이다. 로컬 서버를
+  실기기에서 확인할 때만 `localhost` 대신 같은 네트워크에서 접근 가능한 Mac 주소를 사용한다.
 - `EXPO_PUBLIC_KTO_SERVICE_KEY`: 공공데이터포털에서 발급한 한국관광공사 TourAPI 일반
   인증키. 디코딩 값을 권장하며, 앱 번들에 포함되는 공개 설정이므로 서버 비밀키를 넣지 않는다.
 - `EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY`: Kakao Developers의 네이티브 앱 키. 공개 식별자이며
@@ -46,7 +46,7 @@ Kakao Developers의 같은 애플리케이션에 iOS 번들 ID `com.tripic.app`�
 
 ```bash
 cd apps/mobile
-npx eas-cli@latest env:set --name EXPO_PUBLIC_API_BASE_URL --value https://api.example.com --environment preview --visibility plaintext
+npx eas-cli@latest env:set --name EXPO_PUBLIC_API_BASE_URL --value https://tripic.remin.dev --environment preview --visibility plaintext
 npx eas-cli@latest env:set --name EXPO_PUBLIC_KTO_SERVICE_KEY --value replace-with-data-go-kr-service-key --environment preview --visibility plaintext
 npx eas-cli@latest env:set --name EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY --value replace-with-kakao-native-app-key --environment preview --visibility plaintext
 npx eas-cli@latest env:list --environment preview
