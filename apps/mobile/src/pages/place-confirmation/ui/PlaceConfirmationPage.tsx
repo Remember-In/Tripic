@@ -1,6 +1,6 @@
 import { type Href, useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import {
   PhotoStrip,
@@ -10,7 +10,7 @@ import { radii, semanticColors, spacing } from "@/shared/config/theme";
 import { AppText, PageHeader, PrimaryButton, Screen } from "@/shared/ui";
 
 const photoInfoRoute = "/records/new/photo-info" as Href;
-const aiSettingsRoute = "/records/new/ai-settings" as Href;
+const composeRoute = "/records/new/compose" as Href;
 
 export function PlaceConfirmationPage() {
   const router = useRouter();
@@ -45,7 +45,7 @@ export function PlaceConfirmationPage() {
       return;
     }
 
-    router.push(aiSettingsRoute);
+    router.push(composeRoute);
   };
 
   return (
@@ -56,55 +56,74 @@ export function PlaceConfirmationPage() {
           title={isEditing ? "수정/추가" : "여행지 확인"}
         />
 
-        <View style={styles.photoCard}>
-          <PhotoStrip
-            onPhotoPress={(photo) => {
-              selectPhotoForInfo(photo.id);
-              router.push(photoInfoRoute);
-            }}
-            photos={photos}
-          />
-        </View>
-
-        {!isEditing ? (
-          <View style={styles.visitCard}>
-            <View style={styles.visitCardHeader}>
-              <AppText variant="subtitle02">방문 정보</AppText>
-              <Pressable
-                accessibilityLabel="방문 정보 수정 또는 추가"
-                accessibilityRole="button"
-                hitSlop={8}
-                onPress={() => setIsEditing(true)}
-              >
-                <AppText style={styles.informationText} variant="subtitle04">
-                  수정/추가
-                </AppText>
-              </Pressable>
-            </View>
-            <View style={styles.visitRows}>
-              {visits.slice(0, 3).map((visit) => (
-                <View key={visit.id} style={styles.visitRow}>
-                  <AppText
-                    numberOfLines={1}
-                    style={styles.visitName}
-                    tone="secondary"
-                    variant="subtitle03"
-                  >
-                    {visit.name}
-                  </AppText>
-                  <AppText tone="placeholder" variant="subtitle04">
-                    {visit.date}
-                  </AppText>
-                </View>
-              ))}
-              {visits.length === 0 ? (
-                <AppText tone="placeholder" variant="subtitle04">
-                  사진의 방문 장소를 확인해 주세요.
-                </AppText>
-              ) : null}
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          style={styles.scrollView}
+        >
+          <View style={styles.photoCard}>
+            <View style={styles.photoStripViewport}>
+              <PhotoStrip
+                onPhotoPress={(photo) => {
+                  selectPhotoForInfo(photo.id);
+                  router.push(photoInfoRoute);
+                }}
+                photos={photos}
+              />
             </View>
           </View>
-        ) : null}
+
+          {!isEditing ? (
+            <View style={styles.visitCard}>
+              <View style={styles.visitCardHeader}>
+                <AppText style={styles.visitCardTitle} variant="subtitle02">
+                  방문 정보
+                </AppText>
+                <Pressable
+                  accessibilityLabel="방문 정보 수정 또는 추가"
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  onPress={() => setIsEditing(true)}
+                  style={styles.editButton}
+                >
+                  <AppText
+                    style={styles.informationText}
+                    variant="subtitle04"
+                  >
+                    수정/추가
+                  </AppText>
+                </Pressable>
+              </View>
+              <View style={styles.visitRows}>
+                {visits.map((visit) => (
+                  <View key={visit.id} style={styles.visitRow}>
+                    <AppText
+                      numberOfLines={1}
+                      style={styles.visitName}
+                      tone="secondary"
+                      variant="subtitle03"
+                    >
+                      {visit.name}
+                    </AppText>
+                    <AppText
+                      numberOfLines={1}
+                      style={styles.visitDate}
+                      tone="placeholder"
+                      variant="subtitle04"
+                    >
+                      {visit.date}
+                    </AppText>
+                  </View>
+                ))}
+                {visits.length === 0 ? (
+                  <AppText tone="placeholder" variant="subtitle04">
+                    사진의 방문 장소를 확인해 주세요.
+                  </AppText>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
+        </ScrollView>
 
         <PrimaryButton
           label={
@@ -115,7 +134,6 @@ export function PlaceConfirmationPage() {
                 : "다음"
           }
           onPress={handleBottomButton}
-          style={styles.bottomButton}
         />
       </View>
     </Screen>
@@ -123,16 +141,18 @@ export function PlaceConfirmationPage() {
 }
 
 const styles = StyleSheet.create({
-  bottomButton: {
-    bottom: 0,
-    left: spacing.md,
-    position: "absolute",
-    right: spacing.md,
-    width: "auto",
-  },
   container: {
     flex: 1,
     paddingHorizontal: spacing.md,
+  },
+  content: {
+    paddingBottom: spacing.lg,
+  },
+  editButton: {
+    alignItems: "center",
+    flexShrink: 0,
+    justifyContent: "center",
+    minHeight: 44,
   },
   informationText: {
     color: semanticColors.feedback.information.level1,
@@ -146,6 +166,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     paddingHorizontal: 14,
   },
+  photoStripViewport: {
+    height: 72,
+  },
+  scrollView: {
+    flex: 1,
+  },
   visitCard: {
     backgroundColor: semanticColors.background.surface,
     borderRadius: radii.large,
@@ -156,10 +182,19 @@ const styles = StyleSheet.create({
   visitCardHeader: {
     alignItems: "center",
     flexDirection: "row",
+    gap: spacing.sm,
     justifyContent: "space-between",
+  },
+  visitCardTitle: {
+    flex: 1,
+    minWidth: 0,
+  },
+  visitDate: {
+    flexShrink: 0,
   },
   visitName: {
     flex: 1,
+    minWidth: 0,
   },
   visitRow: {
     alignItems: "center",

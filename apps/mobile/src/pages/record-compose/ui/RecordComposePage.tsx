@@ -4,8 +4,6 @@ import { Alert, StyleSheet, View } from "react-native";
 
 import { type ItineraryDay, type TravelRecord } from "@/entities/travel-record";
 import {
-  mapRecordTripThemeToRecordTheme,
-  mapRecordVoiceThemeToDiaryStyle,
   type DraftPhoto,
   useCreateRecordSession,
 } from "@/features/create-record-session";
@@ -14,19 +12,9 @@ import {
   useLocalRecordOwnerKey,
   useSaveLocalRecordDraftMutation,
 } from "@/features/local-records";
-import { SettingsIcon } from "@/shared/assets/icons";
 import { spacing } from "@/shared/config/theme";
 import { PageHeader, Screen } from "@/shared/ui";
 import { RecordEditor, type RecordEditorValue } from "@/widgets/record-editor";
-
-const recordSettingsRoute = "/records/new/ai-settings?returnTo=compose" as Href;
-
-const tripThemeLabels = {
-  completion: "지역 완주",
-  food: "맛과 체험",
-  history: "역사와 문화",
-  nature: "자연과 풍경",
-} as const;
 
 function groupPhotosByDate(
   photos: DraftPhoto[],
@@ -56,14 +44,8 @@ function groupPhotosByDate(
 
 export function RecordComposePage() {
   const router = useRouter();
-  const {
-    discardTransientGps,
-    finishDraft,
-    getPhotoDetails,
-    photos,
-    tripTheme,
-    voiceTheme,
-  } = useCreateRecordSession();
+  const { discardTransientGps, finishDraft, getPhotoDetails, photos } =
+    useCreateRecordSession();
   const saveRecordDraft = useSaveLocalRecordDraftMutation();
   const ownerKey = useLocalRecordOwnerKey();
 
@@ -74,7 +56,7 @@ export function RecordComposePage() {
         id: "draft",
         place: {
           address: "주소를 확인해 주세요",
-          category: tripThemeLabels[tripTheme],
+          category: "관광지",
           id: "draft-place",
           name: "방문 장소",
           photo: { uri: "" },
@@ -82,9 +64,9 @@ export function RecordComposePage() {
           stampApplied: false,
           visitDate: "",
         },
-        style: mapRecordVoiceThemeToDiaryStyle(voiceTheme),
+        style: null,
         tags: [],
-        theme: mapRecordTripThemeToRecordTheme(tripTheme),
+        theme: null,
         title: "",
       };
     }
@@ -103,7 +85,7 @@ export function RecordComposePage() {
       id: "draft",
       place: {
         address: place?.address ?? "주소를 확인해 주세요",
-        category: tripThemeLabels[tripTheme],
+        category: "관광지",
         id: place?.contentId ?? "draft-place",
         name: place?.name ?? "장소를 확인해 주세요",
         photo: firstPhoto.source,
@@ -111,12 +93,12 @@ export function RecordComposePage() {
         stampApplied: true,
         visitDate: firstDetails.date.replaceAll("-", "."),
       },
-      style: mapRecordVoiceThemeToDiaryStyle(voiceTheme),
+      style: null,
       tags: [],
-      theme: mapRecordTripThemeToRecordTheme(tripTheme),
+      theme: null,
       title: "",
     };
-  }, [getPhotoDetails, photos, tripTheme, voiceTheme]);
+  }, [getPhotoDetails, photos]);
 
   const completeRecord = async (value: RecordEditorValue) => {
     if (photos.length === 0) {
@@ -173,9 +155,9 @@ export function RecordComposePage() {
         ),
         ownerKey,
         photos: draftPhotos,
-        style: mapRecordVoiceThemeToDiaryStyle(voiceTheme),
+        style: null,
         tags: value.tags,
-        theme: mapRecordTripThemeToRecordTheme(tripTheme),
+        theme: null,
         title: value.title,
       });
 
@@ -201,9 +183,6 @@ export function RecordComposePage() {
     <Screen>
       <View style={styles.page}>
         <PageHeader
-          actionAccessibilityLabel="기록 생성 설정"
-          actionIcon={SettingsIcon}
-          onActionPress={() => router.push(recordSettingsRoute)}
           onBackPress={() => router.back()}
           style={styles.header}
           title="기록 생성"

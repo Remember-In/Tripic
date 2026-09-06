@@ -204,11 +204,12 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   days: {
-    gap: spacing.md,
+    gap: spacing.lg,
   },
   dayCard: {
     backgroundColor: semanticColors.background.surface,
     borderRadius: radii.large,
+    paddingBottom: spacing.md,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
   },
