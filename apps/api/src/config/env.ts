@@ -6,6 +6,17 @@ import {
 import { z } from "zod";
 
 /**
+ * 불리언 환경변수 — `true`/`false` 두 가지만 받는다.
+ * zod 의 stringbool 은 `yes`·`on`·`y`·`enabled` 까지 받아들여 표기가 제각각이 되므로 쓰지 않는다.
+ * 표기를 좁혀두면 `on` 처럼 애매한 값이 조용히 통과하지 않고 부팅 단계에서 드러난다.
+ */
+const booleanFlag = (fallback: boolean) =>
+  z
+    .enum(["true", "false"])
+    .default(fallback ? "true" : "false")
+    .transform((value) => value === "true");
+
+/**
  * 서버 환경변수 계약 (docs/10-auth-db-design.md §7).
  * 부팅 시 ConfigModule.validate 로 검증하며, 실패하면 즉시 기동 실패한다.
  */
@@ -39,8 +50,8 @@ export const envSchema = z.object({
     .positive()
     .default(MAX_CANDIDATES),
   /** 기능 노출 스위치 — 해당 서버 API 가 있을 때만 켠다 */
-  FEATURE_AI_DIARY: z.stringbool().default(false),
-  FEATURE_PHOTO_UPLOAD: z.stringbool().default(true),
+  FEATURE_AI_DIARY: booleanFlag(false),
+  FEATURE_PHOTO_UPLOAD: booleanFlag(true),
 });
 
 export type Env = z.infer<typeof envSchema>;
