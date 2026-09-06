@@ -1,6 +1,6 @@
 {
   "name": "@tripic/api",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Tripic API (NestJS) — health/app-config/notices/version + auth/users",
   "private": true,
   "license": "UNLICENSED",
