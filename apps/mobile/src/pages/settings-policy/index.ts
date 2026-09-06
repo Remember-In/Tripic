@@ -1,5 +1,6 @@
 export {
   LocationInformationPage,
+  MapDataPage,
   PhotoMetadataPage,
   PrivacyPolicyPage,
   TermsOfServicePage,

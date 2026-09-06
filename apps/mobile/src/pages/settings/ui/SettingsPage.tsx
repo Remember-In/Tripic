@@ -393,6 +393,10 @@ export function SettingsPage() {
                 onPress={() => router.push("/settings/photo-metadata" as Href)}
               />
               <SettingsRow
+                label="지도 데이터 출처"
+                onPress={() => router.push("/settings/map-data" as Href)}
+              />
+              <SettingsRow
                 label="개인정보 처리방침"
                 onPress={() => router.push("/settings/privacy-policy" as Href)}
               />

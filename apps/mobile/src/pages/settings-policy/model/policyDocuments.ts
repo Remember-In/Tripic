@@ -25,10 +25,56 @@ export type PolicySection = {
 
 export type PolicyDocument = {
   badge?: string;
+  dateLabel?: string;
   description: string;
   effectiveDate: string;
   sections: readonly PolicySection[];
   title: string;
+};
+
+export const mapDataDocument: PolicyDocument = {
+  badge: "오프라인 내장 지도 · 17개 시·도 기준",
+  dateLabel: "경계 기준일",
+  description:
+    "Tripic 여행 지도는 방문 지역을 시각화하기 위해 통계청 SGIS 기반 행정경계 가공 데이터를 사용합니다.",
+  effectiveDate: "2026-07-01",
+  sections: [
+    {
+      fields: [
+        { label: "원 제공기관", value: "통계청 통계지리정보서비스(SGIS)" },
+        { label: "가공", value: "vuski/admdongkor" },
+        { label: "라이선스", value: "공공누리 제1유형 및 CC BY 4.0" },
+        {
+          label: "SGIS 출처",
+          value: "https://sgis.kostat.go.kr",
+        },
+        {
+          label: "가공 데이터",
+          value: "https://github.com/vuski/admdongkor",
+        },
+        {
+          label: "CC BY 4.0",
+          value: "https://creativecommons.org/licenses/by/4.0/",
+        },
+      ],
+      title: "데이터 출처와 이용조건",
+    },
+    {
+      paragraphs: [
+        "본 데이터는 통계청 통계지리정보서비스(SGIS)에서 공공누리 제1유형으로 개방한 행정동 경계를 가공한 것이며, vuski/admdongkor가 CC BY 4.0으로 배포한 자료를 사용합니다.",
+        "Tripic은 행정동 경계를 시군구 단위로 결합하고, 일반구가 있는 도시는 관광공사 지역 단위에 맞춰 상위 시로 결합했습니다. 이후 화면용 좌표로 투영·단순화하고 지역명과 확대 범위를 추가했으며, 작은 화면에서 선택하기 어려운 일부 원격 도서는 인셋으로 재배치했습니다. 화면의 17개 시·도는 유지하면서 하나의 법정동 시·도 코드를 공유하는 광주와 전남은 5자리 시군구 코드로 각각 구분합니다.",
+      ],
+      title: "가공 내용",
+    },
+    {
+      paragraphs: [
+        "지도 모양은 화면 표시와 터치 탐색에 사용합니다. 사진의 실제 방문 지역은 도형 연산으로 추측하지 않고, 사용자가 확정한 관광지의 TourAPI 지역 코드를 기준으로 표시합니다.",
+        "2026년 7월 경계를 사용하며, 인천의 제물포구·영종구·서해구·검단구를 포함한 현재 구·군을 표시합니다. 기존 인천 중구·동구·서구 기록처럼 새 경계로 하나의 구를 정확히 특정할 수 없는 과거 기록은 시·도 방문에는 반영하되 상세 구·군을 임의로 칠하지 않습니다.",
+      ],
+      title: "사용 범위",
+    },
+  ],
+  title: "지도 데이터 출처",
 };
 
 const operatorFields: readonly PolicyField[] = [
