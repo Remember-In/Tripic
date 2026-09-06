@@ -72,12 +72,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   photoButton: {
-    aspectRatio: 1,
     borderRadius: radii.medium,
-    flex: 1,
-    maxWidth: 72,
-    minWidth: 0,
+    height: 72,
     overflow: "hidden",
+    width: 72,
   },
   photo: {
     height: "100%",

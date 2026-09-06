@@ -32,7 +32,13 @@ export function PageHeader({
           icon={BackIcon}
           onPress={onBackPress}
         />
-        <AppText variant="heading01">{title}</AppText>
+        <AppText
+          lineBreakStrategyIOS="hangul-word"
+          style={styles.title}
+          variant="heading01"
+        >
+          {title}
+        </AppText>
       </View>
       {ActionIcon && onActionPress && actionAccessibilityLabel ? (
         <FloatingIconButton
@@ -49,12 +55,20 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     flexDirection: "row",
-    height: 52,
+    gap: spacing.sm,
     justifyContent: "space-between",
+    minHeight: 52,
+    paddingVertical: spacing.xxs,
   },
   leading: {
     alignItems: "center",
+    flex: 1,
     flexDirection: "row",
     gap: spacing.md,
+    minWidth: 0,
+  },
+  title: {
+    flex: 1,
+    minWidth: 0,
   },
 });

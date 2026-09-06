@@ -6,7 +6,7 @@ import {
   type ViewStyle,
 } from "react-native";
 
-import { radii, semanticColors } from "@/shared/config/theme";
+import { radii, semanticColors, spacing } from "@/shared/config/theme";
 import { AppText } from "@/shared/ui/AppText";
 
 export type PrimaryButtonProps = {
@@ -45,7 +45,7 @@ export function PrimaryButton({
       {loading ? (
         <ActivityIndicator color={semanticColors.text.inverse} size="small" />
       ) : (
-        <AppText tone="inverse" variant="button02">
+        <AppText style={styles.label} tone="inverse" variant="button02">
           {label}
         </AppText>
       )}
@@ -58,8 +58,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: semanticColors.brand.primary,
     borderRadius: radii.large,
-    height: 60,
     justifyContent: "center",
+    minHeight: 60,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
     width: "100%",
   },
   disabled: {
@@ -67,5 +69,9 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.72,
+  },
+  label: {
+    flexShrink: 1,
+    textAlign: "center",
   },
 });

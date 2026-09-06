@@ -116,7 +116,9 @@ export function HomePage() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <AppText variant="heading01">여행 지도</AppText>
+          <AppText style={styles.headerTitle} variant="heading01">
+            여행 지도
+          </AppText>
           <View style={styles.headerActions}>
             <FloatingIconButton
               accessibilityLabel="여행 기록 보기"
@@ -247,24 +249,30 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     flexDirection: "row",
-    height: 44,
+    gap: spacing.sm,
     justifyContent: "space-between",
     marginBottom: spacing.lg,
     marginTop: 3,
     maxWidth: 358,
+    minHeight: 44,
     paddingLeft: 11,
     width: "100%",
   },
+  headerTitle: {
+    flex: 1,
+    minWidth: 0,
+  },
   headerActions: {
+    flexShrink: 0,
     flexDirection: "row",
     gap: spacing.sm,
   },
   statsRow: {
     flexDirection: "row",
     gap: spacing.md,
-    height: 94,
     marginTop: spacing.lg,
     maxWidth: 358,
+    minHeight: 94,
     width: "100%",
   },
   statCard: {
@@ -273,13 +281,13 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.xxs,
     justifyContent: "center",
-    overflow: "hidden",
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
   statValueRow: {
     alignItems: "center",
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.xs,
   },
   highlightedStatValue: {

@@ -76,7 +76,9 @@ export function LoginPage() {
               size="small"
             />
           ) : (
-            <AppText variant="button03">카카오로 시작하기</AppText>
+            <AppText style={styles.label} variant="button03">
+              카카오로 시작하기
+            </AppText>
           )}
         </Pressable>
       </View>
@@ -88,14 +90,16 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     justifyContent: "flex-end",
+    paddingBottom: spacing.md,
     paddingHorizontal: spacing.md,
   },
   button: {
     alignItems: "center",
     backgroundColor: semanticColors.background.surface,
     borderRadius: radii.large,
-    height: 60,
     justifyContent: "center",
+    minHeight: 60,
+    paddingVertical: spacing.md,
     position: "relative",
     width: "100%",
   },
@@ -104,6 +108,12 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.64,
+  },
+  label: {
+    flexShrink: 1,
+    paddingHorizontal: spacing.xxl * 2,
+    textAlign: "center",
+    width: "100%",
   },
   symbolBackground: {
     alignItems: "center",
