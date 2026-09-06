@@ -93,16 +93,6 @@ export type UpsertRecordEntryRequestDto = {
   source: EntrySource;
 };
 
-export type GenerateRecordEntryRequestDto = {
-  memo?: string;
-  placeNames?: readonly string[];
-};
-
-export type GeneratedRecordEntryDto = {
-  content: string;
-  source: "AI";
-};
-
 export type RecordContractIssue = {
   message: string;
   path: readonly (number | string)[];
@@ -515,27 +505,6 @@ export function safeParseRecordPhotoDto(
   value: unknown,
 ): SafeParseResult<RecordPhotoDto> {
   return safeParse((photo) => parseRecordPhotoDto(photo, []), value);
-}
-
-export function parseGeneratedRecordEntryDto(
-  value: unknown,
-): GeneratedRecordEntryDto {
-  const object = parseObject(value, []);
-  const source = parseEnum(object.source, entrySources, ["source"]);
-  if (source !== "AI") {
-    return fail(["source"], "AI여야 합니다.");
-  }
-
-  return {
-    content: parseString(object.content, ["content"], { maxLength: 5_000 }),
-    source,
-  };
-}
-
-export function safeParseGeneratedRecordEntryDto(
-  value: unknown,
-): SafeParseResult<GeneratedRecordEntryDto> {
-  return safeParse(parseGeneratedRecordEntryDto, value);
 }
 
 /**

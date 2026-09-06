@@ -3,7 +3,6 @@ import { useMemo } from "react";
 import { Alert, StyleSheet, View } from "react-native";
 
 import { type ItineraryDay, type TravelRecord } from "@/entities/travel-record";
-import { DEFAULT_APP_CONFIG, useAppConfigQuery } from "@/entities/app-config";
 import {
   mapRecordTripThemeToRecordTheme,
   mapRecordVoiceThemeToDiaryStyle,
@@ -57,7 +56,6 @@ function groupPhotosByDate(
 
 export function RecordComposePage() {
   const router = useRouter();
-  const { data: appConfig = DEFAULT_APP_CONFIG } = useAppConfigQuery();
   const {
     discardTransientGps,
     finishDraft,
@@ -211,20 +209,6 @@ export function RecordComposePage() {
           title="기록 생성"
         />
         <RecordEditor
-          aiGenerationEnabled={appConfig.features.aiDiary}
-          generateNoteForDay={(day) => {
-            const topic = tripThemeLabels[tripTheme];
-
-            if (voiceTheme === "documentary") {
-              return `${day}일차에는 ${topic}을 중심으로 여행했다.`;
-            }
-
-            if (voiceTheme === "friendly") {
-              return `${day}일차 ${topic}, 사진보다 더 좋았다! 다음에 또 와야지.`;
-            }
-
-            return `${day}일차, ${topic}을 마주하며 오래 남을 여행의 순간을 기록했다.`;
-          }}
           initialTags={[]}
           initialTitle=""
           onSubmit={completeRecord}

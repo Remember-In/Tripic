@@ -28,8 +28,6 @@ export type RecordEditorValue = {
 };
 
 export type RecordEditorProps = {
-  aiGenerationEnabled?: boolean;
-  generateNoteForDay?: (day: number) => string;
   initialTags?: readonly string[];
   initialTitle?: string;
   onSubmit: (value: RecordEditorValue) => void;
@@ -39,15 +37,7 @@ export type RecordEditorProps = {
   titlePlaceholder?: string;
 };
 
-const generatedNotes: Readonly<Record<number, string>> = {
-  1: "경주월드에서 신나는 놀이기구를 타며 여행을 시작했어요.",
-  2: "경주의 골목과 꽃길을 천천히 걸으며 여유를 즐겼어요.",
-  3: "보문호의 풍경을 바라보며 즐거웠던 여행을 마무리했어요.",
-};
-
 export function RecordEditor({
-  aiGenerationEnabled = false,
-  generateNoteForDay,
   record,
   initialTags = record.tags,
   initialTitle = record.title,
@@ -64,15 +54,6 @@ export function RecordEditor({
 
   const updateNote = (dayId: string, value: string) => {
     setNotes((current) => ({ ...current, [dayId]: value }));
-  };
-
-  const generateNote = (dayId: string, day: number) => {
-    updateNote(
-      dayId,
-      generateNoteForDay?.(day) ??
-        generatedNotes[day] ??
-        "즐거운 여행의 순간을 기록했어요.",
-    );
   };
 
   const toggleTag = (tag: string) => {
@@ -154,22 +135,6 @@ export function RecordEditor({
                 style={[typography.caption01, styles.noteInput]}
                 value={notes[day.id]}
               />
-
-              {aiGenerationEnabled ? (
-                <Pressable
-                  accessibilityLabel={`${day.day}일차 메모 AI 자동 생성`}
-                  accessibilityRole="button"
-                  onPress={() => generateNote(day.id, day.day)}
-                  style={({ pressed }) => [
-                    styles.generateButton,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <AppText tone="placeholder" variant="button06">
-                    AI 자동 생성
-                  </AppText>
-                </Pressable>
-              ) : null}
             </View>
           ))}
         </View>
@@ -279,11 +244,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     textAlignVertical: "center",
-  },
-  generateButton: {
-    alignItems: "center",
-    height: 43,
-    justifyContent: "center",
   },
   tagsSection: {
     gap: spacing.xs,

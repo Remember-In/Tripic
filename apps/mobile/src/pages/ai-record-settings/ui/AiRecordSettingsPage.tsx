@@ -70,7 +70,7 @@ export function AiRecordSettingsPage() {
       <View style={styles.container}>
         <PageHeader
           onBackPress={() => router.back()}
-          title="AI 기록 생성 설정"
+          title="기록 스타일 설정"
         />
 
         <ScrollView
@@ -83,7 +83,7 @@ export function AiRecordSettingsPage() {
               tone="tertiary"
               variant="subtitle03"
             >
-              테마
+              문체
             </AppText>
             <View style={styles.optionCard}>
               {voiceOptions.map((option) => (
@@ -104,7 +104,7 @@ export function AiRecordSettingsPage() {
               tone="tertiary"
               variant="subtitle03"
             >
-              테마
+              여행 테마
             </AppText>
             <View style={styles.optionCard}>
               {tripThemeOptions.map((option) => (
