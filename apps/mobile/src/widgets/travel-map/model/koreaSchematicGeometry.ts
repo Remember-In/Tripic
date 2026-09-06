@@ -10,9 +10,8 @@ export type RegionGeometry = Readonly<{
 }>;
 
 /**
- * 외부 경계 데이터를 복제하지 않고 Tripic에서 직접 작성한, 대체 가능한 17개 시·도 개략도다.
- * 행정 경계나 위치 판정에는 사용하지 않으며, TourAPI areaCode별 상태를 보여 주기만 한다.
- * 추후 출처와 라이선스가 확인된 공식 경계 데이터로 이 파일만 교체할 수 있다.
+ * Tripic 디자인에 맞춰 직접 작성한 17개 시·도 개략도다.
+ * 방문 현황과 화면 탐색을 위한 그림이며 실제 행정 경계 판정에는 사용하지 않는다.
  */
 export const KOREA_SCHEMATIC_GEOMETRY = [
   {

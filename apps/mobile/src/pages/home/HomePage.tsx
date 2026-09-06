@@ -1,10 +1,11 @@
 import { useRouter, type Href } from "expo-router";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import {
   TOTAL_KTO_REGION_COUNT,
   collectVisitedAreaCodes,
+  collectVisitedSigunguKeys,
 } from "@/entities/region";
 import { useCreateRecordSession } from "@/features/create-record-session";
 import {
@@ -23,7 +24,15 @@ import {
   PrimaryButton,
   Screen,
 } from "@/shared/ui";
-import { TravelMap } from "@/widgets/travel-map";
+import {
+  INITIAL_TRAVEL_MAP_HISTORY,
+  TravelMap,
+  currentMapDepth,
+  goBackMapHistory,
+  navigateMapHistory,
+  type TravelMapDepth,
+  type TravelMapHistory,
+} from "@/widgets/travel-map";
 
 type StatCardProps = {
   highlighted?: boolean;
@@ -62,9 +71,13 @@ export function HomePage() {
   const router = useRouter();
   const { resetDraft } = useCreateRecordSession();
   const areaProgress = useLocalRegionProgressQuery("area");
+  const sigunguProgress = useLocalRegionProgressQuery("sigungu");
   const recordsQuery = useLocalRecordsQuery();
   const stats = useLocalRecordStatsQuery();
   const ownerKey = useLocalRecordOwnerKey();
+  const [mapHistory, setMapHistory] = useState<TravelMapHistory>(
+    INITIAL_TRAVEL_MAP_HISTORY,
+  );
   const recentRecords = useMemo(
     () =>
       (recordsQuery.data ?? []).slice(0, 3).map(mapLocalRecordSummaryToDisplay),
@@ -77,6 +90,19 @@ export function HomePage() {
       ),
     [areaProgress.data],
   );
+  const visitedSigunguKeys = useMemo(
+    () => collectVisitedSigunguKeys(sigunguProgress.data ?? []),
+    [sigunguProgress.data],
+  );
+  const mapDepth = currentMapDepth(mapHistory);
+
+  const navigateMap = useCallback((nextDepth: TravelMapDepth) => {
+    setMapHistory((history) => navigateMapHistory(history, nextDepth));
+  }, []);
+
+  const goBackMap = useCallback(() => {
+    setMapHistory((history) => goBackMapHistory(history));
+  }, []);
 
   const openRecords = useCallback(() => {
     router.push("/records" as Href);
@@ -133,7 +159,13 @@ export function HomePage() {
           </View>
         </View>
 
-        <TravelMap visitedAreaCodes={visitedAreaCodes} />
+        <TravelMap
+          depth={mapDepth}
+          onBack={goBackMap}
+          onDepthChange={navigateMap}
+          visitedAreaCodes={visitedAreaCodes}
+          visitedSigunguKeys={visitedSigunguKeys}
+        />
 
         <View style={styles.statsRow}>
           <StatCard
