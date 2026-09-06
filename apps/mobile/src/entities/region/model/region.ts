@@ -46,6 +46,8 @@ export type Region = Readonly<{
   shortName: string;
 }>;
 
+export type KtoSigunguKey = `${KtoAreaCode}:${string}`;
+
 /**
  * 한국관광공사 TourAPI의 시·도 areaCode 목록이다.
  * id는 표시명 변경과 무관하게 앱 내부에서 유지하는 영문 식별자다.
@@ -117,6 +119,53 @@ export const KTO_REGIONS = [
 
 export const TOTAL_KTO_REGION_COUNT = KTO_REGIONS.length;
 
+/**
+ * 여행 지도 디자인에서 사용하는 전국 시·군 기준 분모다.
+ * 75개 시와 82개 군을 합한 값이며, 자치구와 제주 행정시는 제외한다.
+ */
+export const TOTAL_TRAVEL_CITY_COUNTY_COUNT = 157;
+
+function createNumericCodeSet(
+  lastCode: number,
+  excludedCodes: readonly number[] = [],
+): ReadonlySet<string> {
+  const excluded = new Set(excludedCodes);
+  return new Set(
+    Array.from({ length: lastCode }, (_, index) => index + 1)
+      .filter((code) => !excluded.has(code))
+      .map(String),
+  );
+}
+
+const PROVINCE_CITY_COUNTY_CODES: Readonly<
+  Partial<Record<KtoAreaCode, ReadonlySet<string>>>
+> = {
+  "31": createNumericCodeSet(31),
+  "32": createNumericCodeSet(18),
+  // TourAPI에 남은 폐지 지역 청원군(9)은 제외한다.
+  "33": createNumericCodeSet(12, [9]),
+  "34": createNumericCodeSet(16, [10]),
+  // 군위군(옛 5)은 대구광역시 코드 4:9로 편입됐다.
+  "35": createNumericCodeSet(23, [5]),
+  // TourAPI에 남은 폐지 지역 마산시(6), 진해시(14)와 미반환 코드(11)는 제외한다.
+  "36": createNumericCodeSet(21, [6, 11, 14]),
+  "37": createNumericCodeSet(14),
+  "38": createNumericCodeSet(24, [14, 15]),
+};
+
+/**
+ * 광역시 안에 남아 있는 군의 TourAPI areaCode:sigunguCode 조합이다.
+ * 제주(39)의 제주시·서귀포시는 행정시이므로 전국 157개 시·군에는 넣지 않는다.
+ */
+const METROPOLITAN_COUNTY_KEYS: ReadonlySet<KtoSigunguKey> = new Set([
+  "2:1", // 인천 강화군
+  "2:9", // 인천 옹진군
+  "4:3", // 대구 달성군
+  "4:9", // 대구 군위군
+  "6:3", // 부산 기장군
+  "7:5", // 울산 울주군
+]);
+
 const areaCodeValues = new Set<string>(KTO_AREA_CODES);
 const regionsByAreaCode = new Map<KtoAreaCode, Region>(
   KTO_REGIONS.map((region) => [region.areaCode, region]),
@@ -144,6 +193,74 @@ export function collectVisitedAreaCodes(
   }
 
   return visitedAreaCodes;
+}
+
+export function createKtoSigunguKey(
+  areaCode: string | null | undefined,
+  sigunguCode: string | null | undefined,
+): KtoSigunguKey | null {
+  const normalizedSigunguCode = sigunguCode?.trim();
+
+  if (!isKtoAreaCode(areaCode) || !normalizedSigunguCode) {
+    return null;
+  }
+
+  return `${areaCode}:${normalizedSigunguCode}`;
+}
+
+export function collectVisitedSigunguKeys(
+  regions: Iterable<
+    Readonly<{
+      areaCode: string | null | undefined;
+      sigunguCode: string | null | undefined;
+    }>
+  >,
+): ReadonlySet<KtoSigunguKey> {
+  const keys = new Set<KtoSigunguKey>();
+
+  for (const region of regions) {
+    const key = createKtoSigunguKey(region.areaCode, region.sigunguCode);
+    if (key) {
+      keys.add(key);
+    }
+  }
+
+  return keys;
+}
+
+export function isTravelCityCountyKey(
+  areaCode: string | null | undefined,
+  sigunguCode: string | null | undefined,
+): boolean {
+  const key = createKtoSigunguKey(areaCode, sigunguCode);
+  if (!key || !isKtoAreaCode(areaCode)) {
+    return false;
+  }
+
+  return (
+    PROVINCE_CITY_COUNTY_CODES[areaCode]?.has(sigunguCode?.trim() ?? "") ===
+      true || METROPOLITAN_COUNTY_KEYS.has(key)
+  );
+}
+
+export function collectVisitedCityCountyKeys(
+  regions: Iterable<
+    Readonly<{
+      areaCode: string | null | undefined;
+      sigunguCode: string | null | undefined;
+    }>
+  >,
+): ReadonlySet<KtoSigunguKey> {
+  const keys = new Set<KtoSigunguKey>();
+
+  for (const region of regions) {
+    const key = createKtoSigunguKey(region.areaCode, region.sigunguCode);
+    if (key && isTravelCityCountyKey(region.areaCode, region.sigunguCode)) {
+      keys.add(key);
+    }
+  }
+
+  return keys;
 }
 
 export type RegionVisitSummary = Readonly<{

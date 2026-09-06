@@ -8,6 +8,11 @@ import type {
   KtoRequestOptions,
 } from "./types";
 import { MAX_KTO_LIST_CANDIDATES, MAX_KTO_RADIUS_METERS } from "./types";
+import {
+  getLegalAreaCode,
+  getLegalDistrictCodes,
+  resolveKtoRegionCodes,
+} from "./regionCodeMap";
 
 const KTO_BASE_URL = "https://apis.data.go.kr/B551011/KorService2";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -75,11 +80,20 @@ function parseListItem(value: unknown): KtoListItem | null {
     return null;
   }
 
+  const regionCodes = resolveKtoRegionCodes({
+    areaCode: optionalString(item.areacode),
+    legalAreaCode:
+      optionalString(item.lDongRegnCd) ?? optionalString(item.ldongregncd),
+    legalSigunguCode:
+      optionalString(item.lDongSignguCd) ?? optionalString(item.ldongsigngucd),
+    sigunguCode: optionalString(item.sigungucode),
+  });
+
   return {
     address: [asString(item.addr1), asString(item.addr2)]
       .filter(Boolean)
       .join(" "),
-    areaCode: asString(item.areacode),
+    areaCode: regionCodes.areaCode,
     categoryCode:
       optionalString(item.cat3) ??
       optionalString(item.cat2) ??
@@ -88,10 +102,39 @@ function parseListItem(value: unknown): KtoListItem | null {
     contentTypeId: optionalString(item.contenttypeid),
     distanceMeters: optionalNumber(item.dist),
     imageUrl: optionalString(item.firstimage),
-    sigunguCode: optionalString(item.sigungucode),
+    legalAreaCode: regionCodes.legalAreaCode,
+    legalSigunguCode: regionCodes.legalSigunguCode,
+    sigunguCode: regionCodes.sigunguCode,
     thumbnailUrl: optionalString(item.firstimage2),
     title,
   };
+}
+
+function areaSearchFilters(input: KtoAreaSearchInput) {
+  const areaCode = input.areaCode?.trim();
+  const sigunguCode = input.sigunguCode?.trim();
+  if (!areaCode) {
+    return [{}] as const;
+  }
+
+  const legalAreaCode = getLegalAreaCode(areaCode);
+  if (!legalAreaCode) {
+    return [{ areaCode, sigunguCode }];
+  }
+
+  if (!sigunguCode) {
+    return [{ lDongRegnCd: legalAreaCode }];
+  }
+
+  const legalDistrictCodes = getLegalDistrictCodes(areaCode, sigunguCode);
+  if (legalDistrictCodes.length === 0) {
+    return [{ areaCode, sigunguCode }];
+  }
+
+  return legalDistrictCodes.map((legalSigunguCode) => ({
+    lDongRegnCd: legalAreaCode,
+    lDongSignguCd: legalSigunguCode,
+  }));
 }
 
 function extractItems(payload: unknown): readonly unknown[] {
@@ -300,21 +343,47 @@ export async function fetchKtoPlacesByArea(
   options?: KtoListRequestOptions,
 ) {
   const maxCandidates = candidateLimit(options?.maxCandidates);
-  const items = await requestKto(
-    "areaBasedList2",
-    {
-      areaCode: input.areaCode?.trim(),
-      arrange: "A",
-      numOfRows: maxCandidates,
-      pageNo: 1,
-      sigunguCode: input.sigunguCode?.trim(),
-    },
-    options,
+  const requestedAreaCode = input.areaCode?.trim();
+  const requestedSigunguCode = input.sigunguCode?.trim();
+  const isSharedLegalAreaBrowse =
+    !requestedSigunguCode &&
+    (requestedAreaCode === "5" || requestedAreaCode === "38");
+  const requestRows = isSharedLegalAreaBrowse
+    ? MAX_KTO_LIST_CANDIDATES
+    : maxCandidates;
+  const itemGroups = await Promise.all(
+    areaSearchFilters(input).map((regionFilter) =>
+      requestKto(
+        "areaBasedList2",
+        {
+          ...regionFilter,
+          arrange: "A",
+          numOfRows: requestRows,
+          pageNo: 1,
+        },
+        options,
+      ),
+    ),
   );
 
-  return items
+  const seenContentIds = new Set<string>();
+  return itemGroups
+    .flat()
     .map(parseListItem)
     .filter((item): item is KtoListItem => Boolean(item))
+    .filter((item) => !requestedAreaCode || item.areaCode === requestedAreaCode)
+    .filter(
+      (item) =>
+        !requestedSigunguCode || item.sigunguCode === requestedSigunguCode,
+    )
+    .filter((item) => {
+      if (seenContentIds.has(item.contentId)) {
+        return false;
+      }
+      seenContentIds.add(item.contentId);
+      return true;
+    })
+    .sort((left, right) => left.title.localeCompare(right.title, "ko"))
     .slice(0, maxCandidates);
 }
 
