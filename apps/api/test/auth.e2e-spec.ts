@@ -2,6 +2,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Test } from "@nestjs/testing";
 import { UnauthorizedException, type INestApplication } from "@nestjs/common";
 import { request, spec } from "pactum";
+import { z } from "zod";
+import {
+  authTokensSchema,
+  kakaoLoginResultSchema,
+  meSchema,
+} from "@tripic/shared";
 import { AppModule } from "@/app.module";
 import {
   KAKAO_VERIFIER,
@@ -18,20 +24,25 @@ const kakaoStub: KakaoVerifier = {
   },
 };
 
-interface LoginBody {
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
-  isNewUser: boolean;
-  user: { id: string; nickname: string | null };
-}
+/**
+ * 응답 검증에 **앱과 공유하는 계약 스키마를 그대로 쓴다** (@tripic/shared).
+ * 테스트에서 스키마를 다시 정의하면 서버가 계약을 어겨도 테스트만 통과할 수 있다.
+ */
+const validationErrorSchema = z.object({
+  message: z.string(),
+  issues: z.array(z.object({ path: z.string(), message: z.string() })),
+});
+
+type LoginBody = z.infer<typeof kakaoLoginResultSchema>;
 
 const login = async (kakaoToken: string): Promise<LoginBody> =>
-  (await spec()
-    .post("/auth/kakao")
-    .withJson({ kakaoAccessToken: kakaoToken })
-    .expectStatus(201)
-    .returns("res.body")) as LoginBody;
+  kakaoLoginResultSchema.parse(
+    await spec()
+      .post("/auth/kakao")
+      .withJson({ kakaoAccessToken: kakaoToken })
+      .expectStatus(201)
+      .returns("res.body"),
+  );
 
 describe("Auth (e2e)", () => {
   let app: INestApplication;
@@ -80,6 +91,55 @@ describe("Auth (e2e)", () => {
     it("본문 검증 실패 → 400", async () => {
       await spec().post("/auth/kakao").withJson({}).expectStatus(400);
     });
+
+    it("빈 토큰·타입이 다른 토큰도 400 — 카카오까지 가지 않는다", async () => {
+      await spec()
+        .post("/auth/kakao")
+        .withJson({ kakaoAccessToken: "" })
+        .expectStatus(400);
+      await spec()
+        .post("/auth/kakao")
+        .withJson({ kakaoAccessToken: 12345 })
+        .expectStatus(400);
+    });
+
+    it("400 응답은 어떤 필드가 틀렸는지 알려준다", async () => {
+      const body = await spec()
+        .post("/auth/kakao")
+        .withJson({})
+        .expectStatus(400)
+        .returns("res.body");
+
+      expect(
+        validationErrorSchema.parse(body).issues.map((issue) => issue.path),
+      ).toContain("kakaoAccessToken");
+    });
+
+    it("서로 다른 카카오 계정은 서로 다른 사용자다", async () => {
+      const first = await login("valid-distinct-1");
+      const second = await login("valid-distinct-2");
+
+      expect(second.user.id).not.toBe(first.user.id);
+      expect(second.isNewUser).toBe(true);
+    });
+
+    it("로그인할 때마다 새 refresh 토큰을 발급한다 (family 분리)", async () => {
+      const first = await login("valid-family-1");
+      const second = await login("valid-family-1");
+
+      expect(second.refreshToken).not.toBe(first.refreshToken);
+
+      // 한쪽을 로그아웃해도 다른 기기의 세션은 살아 있어야 한다
+      await spec()
+        .post("/auth/logout")
+        .withBearerToken(second.accessToken)
+        .withJson({ refreshToken: second.refreshToken })
+        .expectStatus(204);
+      await spec()
+        .post("/auth/refresh")
+        .withJson({ refreshToken: first.refreshToken })
+        .expectStatus(200);
+    });
   });
 
   describe("GET/PATCH /users/me", () => {
@@ -109,6 +169,78 @@ describe("Auth (e2e)", () => {
         .withJson({ nickname: "a" })
         .expectStatus(400);
     });
+
+    it("닉네임 길이 경계 — 2자는 되고 21자는 안 된다", async () => {
+      const body = await login("valid-nickname-2");
+
+      await spec()
+        .patch("/users/me")
+        .withBearerToken(body.accessToken)
+        .withJson({ nickname: "가나" })
+        .expectStatus(200);
+      await spec()
+        .patch("/users/me")
+        .withBearerToken(body.accessToken)
+        .withJson({ nickname: "가".repeat(20) })
+        .expectStatus(200);
+      await spec()
+        .patch("/users/me")
+        .withBearerToken(body.accessToken)
+        .withJson({ nickname: "가".repeat(21) })
+        .expectStatus(400);
+    });
+
+    it("공백만 있는 닉네임은 거부한다 (trim 후 길이로 판단)", async () => {
+      const body = await login("valid-nickname-3");
+
+      await spec()
+        .patch("/users/me")
+        .withBearerToken(body.accessToken)
+        .withJson({ nickname: "    " })
+        .expectStatus(400);
+    });
+
+    it("닉네임은 바꿔도 다시 조회하면 유지된다", async () => {
+      const body = await login("valid-nickname-4");
+      await spec()
+        .patch("/users/me")
+        .withBearerToken(body.accessToken)
+        .withJson({ nickname: "처음" })
+        .expectStatus(200);
+      await spec()
+        .patch("/users/me")
+        .withBearerToken(body.accessToken)
+        .withJson({ nickname: "바꿈" })
+        .expectStatus(200);
+
+      await spec()
+        .get("/users/me")
+        .withBearerToken(body.accessToken)
+        .expectStatus(200)
+        .expectJsonLike({ nickname: "바꿈" });
+    });
+
+    it("남의 access token 으로는 내 프로필이 나오지 않는다", async () => {
+      const mine = await login("valid-isolation-1");
+      const other = await login("valid-isolation-2");
+
+      const body = await spec()
+        .get("/users/me")
+        .withBearerToken(other.accessToken)
+        .expectStatus(200)
+        .returns("res.body");
+
+      expect(meSchema.parse(body).id).toBe(other.user.id);
+      expect(meSchema.parse(body).id).not.toBe(mine.user.id);
+    });
+
+    it("Bearer 형식이 아니거나 위조된 토큰은 401", async () => {
+      await spec()
+        .get("/users/me")
+        .withHeaders("authorization", "Token abc")
+        .expectStatus(401);
+      await spec().get("/users/me").withBearerToken("a.b.c").expectStatus(401);
+    });
   });
 
   describe("POST /auth/refresh — rotation + 재사용 감지", () => {
@@ -124,11 +256,13 @@ describe("Auth (e2e)", () => {
 
     it("구 토큰 재사용 → 401 + family 전체 무효화 (rotation된 새 토큰도 죽는다)", async () => {
       const body = await login("valid-reuse-1");
-      const rotated = (await spec()
-        .post("/auth/refresh")
-        .withJson({ refreshToken: body.refreshToken })
-        .expectStatus(200)
-        .returns("res.body")) as LoginBody;
+      const rotated = authTokensSchema.parse(
+        await spec()
+          .post("/auth/refresh")
+          .withJson({ refreshToken: body.refreshToken })
+          .expectStatus(200)
+          .returns("res.body"),
+      );
 
       // 탈취 시나리오: 이미 교체된 구 토큰을 다시 사용
       await spec()
@@ -148,6 +282,49 @@ describe("Auth (e2e)", () => {
         .post("/auth/refresh")
         .withJson({ refreshToken: "unknown-token" })
         .expectStatus(401);
+    });
+
+    it("본문이 비었거나 타입이 다르면 400 (401 이 아니다)", async () => {
+      await spec().post("/auth/refresh").withJson({}).expectStatus(400);
+      await spec()
+        .post("/auth/refresh")
+        .withJson({ refreshToken: "" })
+        .expectStatus(400);
+      await spec()
+        .post("/auth/refresh")
+        .withJson({ refreshToken: 123 })
+        .expectStatus(400);
+    });
+
+    it("refresh 는 공개 라우트다 — access token 이 만료돼도 갱신할 수 있다", async () => {
+      const body = await login("valid-public-refresh");
+
+      // Bearer 를 아예 보내지 않아도 통과해야 한다 (앱이 만료 후 호출하는 경로)
+      await spec()
+        .post("/auth/refresh")
+        .withJson({ refreshToken: body.refreshToken })
+        .expectStatus(200);
+    });
+
+    it("연속 rotation — 매번 새 토큰이 나오고 직전 토큰만 무효가 된다", async () => {
+      const body = await login("valid-chain-1");
+      const first = authTokensSchema.parse(
+        await spec()
+          .post("/auth/refresh")
+          .withJson({ refreshToken: body.refreshToken })
+          .expectStatus(200)
+          .returns("res.body"),
+      );
+      const second = authTokensSchema.parse(
+        await spec()
+          .post("/auth/refresh")
+          .withJson({ refreshToken: first.refreshToken })
+          .expectStatus(200)
+          .returns("res.body"),
+      );
+
+      expect(second.refreshToken).not.toBe(first.refreshToken);
+      expect(second.accessToken).toBeTruthy();
     });
   });
 

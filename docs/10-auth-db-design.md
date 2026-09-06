@@ -233,6 +233,10 @@ erDiagram
 | `JWT_REFRESH_TTL_DAYS` | refresh token 수명 (기본 30)             | 사용 |
 | `KAKAO_APP_ID`         | access_token_info의 app_id 대조용 (필수) | 사용 |
 
+`/app-config` 응답값도 환경변수로 덮을 수 있다 (전부 선택, 기본값은 코드에 있음) —
+`KTO_DEFAULT_RADIUS_M`·`KTO_MAX_RADIUS_M`·`KTO_MAX_CANDIDATES`·`FEATURE_AI_DIARY`·
+`FEATURE_PHOTO_UPLOAD`. 상세는 [13-operations-api-design.md](./13-operations-api-design.md) §2.
+
 `KAKAO_ADMIN_KEY`는 현재 불필요 — 회원탈퇴 시 서버 측 unlink(admin API)를 도입할 때만 필요.
 템플릿: [apps/api/.env.example](../apps/api/.env.example)
 

@@ -1,4 +1,20 @@
+import {
+  DEFAULT_RADIUS_M,
+  EXPANDED_RADIUS_M,
+  MAX_CANDIDATES,
+} from "@tripic/shared";
 import { z } from "zod";
+
+/**
+ * 불리언 환경변수 — `true`/`false` 두 가지만 받는다.
+ * zod 의 stringbool 은 `yes`·`on`·`y`·`enabled` 까지 받아들여 표기가 제각각이 되므로 쓰지 않는다.
+ * 표기를 좁혀두면 `on` 처럼 애매한 값이 조용히 통과하지 않고 부팅 단계에서 드러난다.
+ */
+const booleanFlag = (fallback: boolean) =>
+  z
+    .enum(["true", "false"])
+    .default(fallback ? "true" : "false")
+    .transform((value) => value === "true");
 
 /**
  * 서버 환경변수 계약 (docs/10-auth-db-design.md §7).
@@ -13,6 +29,29 @@ export const envSchema = z.object({
   /** 카카오 앱 app_id — 타 카카오 앱 토큰 차단용. 필수 (미설정 시 부팅 실패) */
   KAKAO_APP_ID: z.coerce.number().int().positive(),
   PORT: z.coerce.number().int().default(3000),
+
+  /**
+   * GET /app-config 로 앱에 내려주는 값 (docs/13 §2).
+   * 기본값은 PRD 6.4 기준이고, 배포 없이 조정하려면 환경변수로 덮는다.
+   */
+  KTO_DEFAULT_RADIUS_M: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(DEFAULT_RADIUS_M),
+  KTO_MAX_RADIUS_M: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(EXPANDED_RADIUS_M),
+  KTO_MAX_CANDIDATES: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(MAX_CANDIDATES),
+  /** 기능 노출 스위치 — 해당 서버 API 가 있을 때만 켠다 */
+  FEATURE_AI_DIARY: booleanFlag(false),
+  FEATURE_PHOTO_UPLOAD: booleanFlag(true),
 });
 
 export type Env = z.infer<typeof envSchema>;
