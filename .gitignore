@@ -40,6 +40,10 @@ coverage/
 *.orig
 web-build/
 
+# Expo Continuous Native Generation (local prebuild output)
+apps/mobile/android/
+apps/mobile/ios/
+
 # OS
 .DS_Store
 Thumbs.db
