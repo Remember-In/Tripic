@@ -3,6 +3,11 @@ import { Test } from "@nestjs/testing";
 import { UnauthorizedException, type INestApplication } from "@nestjs/common";
 import { request, spec } from "pactum";
 import { z } from "zod";
+import {
+  authTokensSchema,
+  kakaoLoginResultSchema,
+  meSchema,
+} from "@tripic/shared";
 import { AppModule } from "@/app.module";
 import {
   KAKAO_VERIFIER,
@@ -19,37 +24,19 @@ const kakaoStub: KakaoVerifier = {
   },
 };
 
-// 응답은 타입 단언 대신 스키마로 검증한다 — 계약이 어긋나면 여기서 바로 실패한다
-const loginBodySchema = z.object({
-  accessToken: z.string().min(1),
-  refreshToken: z.string().min(1),
-  expiresIn: z.number().int().positive(),
-  isNewUser: z.boolean(),
-  user: z.object({ id: z.string().min(1), nickname: z.string().nullable() }),
-});
-
-const meSchema = z.object({
-  id: z.string().min(1),
-  nickname: z.string().nullable(),
-  createdAt: z.string().min(1),
-});
-
+/**
+ * 응답 검증에 **앱과 공유하는 계약 스키마를 그대로 쓴다** (@tripic/shared).
+ * 테스트에서 스키마를 다시 정의하면 서버가 계약을 어겨도 테스트만 통과할 수 있다.
+ */
 const validationErrorSchema = z.object({
   message: z.string(),
   issues: z.array(z.object({ path: z.string(), message: z.string() })),
 });
 
-/** refresh 응답 — 로그인 응답에서 사용자 정보가 빠진 형태 */
-const tokensSchema = loginBodySchema.pick({
-  accessToken: true,
-  refreshToken: true,
-  expiresIn: true,
-});
-
-type LoginBody = z.infer<typeof loginBodySchema>;
+type LoginBody = z.infer<typeof kakaoLoginResultSchema>;
 
 const login = async (kakaoToken: string): Promise<LoginBody> =>
-  loginBodySchema.parse(
+  kakaoLoginResultSchema.parse(
     await spec()
       .post("/auth/kakao")
       .withJson({ kakaoAccessToken: kakaoToken })
@@ -269,7 +256,7 @@ describe("Auth (e2e)", () => {
 
     it("구 토큰 재사용 → 401 + family 전체 무효화 (rotation된 새 토큰도 죽는다)", async () => {
       const body = await login("valid-reuse-1");
-      const rotated = tokensSchema.parse(
+      const rotated = authTokensSchema.parse(
         await spec()
           .post("/auth/refresh")
           .withJson({ refreshToken: body.refreshToken })
@@ -321,14 +308,14 @@ describe("Auth (e2e)", () => {
 
     it("연속 rotation — 매번 새 토큰이 나오고 직전 토큰만 무효가 된다", async () => {
       const body = await login("valid-chain-1");
-      const first = tokensSchema.parse(
+      const first = authTokensSchema.parse(
         await spec()
           .post("/auth/refresh")
           .withJson({ refreshToken: body.refreshToken })
           .expectStatus(200)
           .returns("res.body"),
       );
-      const second = tokensSchema.parse(
+      const second = authTokensSchema.parse(
         await spec()
           .post("/auth/refresh")
           .withJson({ refreshToken: first.refreshToken })

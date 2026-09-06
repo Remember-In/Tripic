@@ -3,6 +3,7 @@ import { Test } from "@nestjs/testing";
 import { UnauthorizedException, type INestApplication } from "@nestjs/common";
 import { request, spec } from "pactum";
 import { z } from "zod";
+import { kakaoLoginResultSchema } from "@tripic/shared";
 import { AppModule } from "@/app.module";
 import {
   KAKAO_VERIFIER,
@@ -19,18 +20,14 @@ const kakaoStub: KakaoVerifier = {
   },
 };
 
-// 응답을 타입 단언 대신 스키마로 검증한다 — 계약이 어긋나면 여기서 바로 실패한다
-const loginBodySchema = z.object({
-  accessToken: z.string().min(1),
-  refreshToken: z.string().min(1),
-  isNewUser: z.boolean(),
-  user: z.object({ id: z.string().min(1), nickname: z.string().nullable() }),
-});
-
-type LoginBody = z.infer<typeof loginBodySchema>;
+/**
+ * 응답 검증에 **앱과 공유하는 계약 스키마를 그대로 쓴다** (@tripic/shared).
+ * 테스트가 스키마를 다시 정의하면 서버가 계약을 어겨도 테스트만 통과할 수 있다.
+ */
+type LoginBody = z.infer<typeof kakaoLoginResultSchema>;
 
 const login = async (kakaoToken: string): Promise<LoginBody> =>
-  loginBodySchema.parse(
+  kakaoLoginResultSchema.parse(
     await spec()
       .post("/auth/kakao")
       .withJson({ kakaoAccessToken: kakaoToken })
