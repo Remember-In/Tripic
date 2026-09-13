@@ -2,7 +2,7 @@
 
 | 항목      | 내용                                                                                                                                                                                            |
 | --------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 상태      | auth/users API + 회원탈퇴 구현 완료 (hard delete 전환 포함) · 기록/사진 API 설계 단계                                                                                                           |
+| 상태      | auth/users API + 회원탈퇴(hard delete) · 기록 콘텐츠/사진 API 모두 구현 완료 · 방문 관광지만 검토 대기                                                                                          |
 | 근거      | [docs/06-architecture.md](./06-architecture.md) §10.4 P1 확장 후보 (PostgreSQL + Prisma)                                                                                                        |
 | 디자인    | Figma 로그인 화면 — "카카오로 시작하기" 단일 버튼, AI 기록 생성 설정, 내 여행 기록                                                                                                              |
 | 플로우    | Figma Flow — 최초 실행 → 회원가입 여부 → (신규) 닉네임/권한 설정 → 카카오 로그인 → 홈                                                                                                           |
@@ -16,7 +16,7 @@
 - 소셜 로그인은 **카카오 단독**이다 (구글 미지원 — 디자인/플로우와 일치).
 - 서버 DB는 **계정/인증 + 사용자가 직접 확정한 여행 기록**을 저장한다.
   GPS 좌표·EXIF 사진·KTO OpenAPI 원천 데이터는 어떤 테이블에도 저장하지 않는다.
-  - 저장하는 것: 기록 제목/테마/문체/해시태그, 날짜별 일기 본문(AI 생성 또는 직접 작성),
+  - 저장하는 것: 기록 제목/테마/문체/해시태그, 날짜별 일기 본문(사용자 직접 작성),
     사용자가 확정한 관광지의 KTO `contentId` + 지역/분류 코드 + 방문일.
   - 저장하는 것(선택): **EXIF 등 위치 메타데이터를 제거한 사진 사본** — 기기 변경 시 복원용,
     선택 동의 기반 (계약: [11-records-api-design.md](./11-records-api-design.md) §3.1).
@@ -99,10 +99,8 @@ erDiagram
     users {
         text id PK "uuid(7)"
         text nickname "nullable — 가입 직후 null"
-        UserStatus status "제거 예정 — 전면 hard delete 정책(§3)"
         timestamp createdAt
         timestamp updatedAt
-        timestamp deletedAt "제거 예정 — hard delete 정책(§3)"
     }
 
     social_accounts {
@@ -131,6 +129,7 @@ erDiagram
 erDiagram
     users ||--o{ records : "1:N"
     records ||--o{ record_entries : "1:N"
+    records ||--o{ record_photos : "1:N"
     records ||--o{ record_places : "1:N"
 
     records {
@@ -142,7 +141,6 @@ erDiagram
         text_arr hashtags "배열"
         timestamp createdAt "INDEX(userId, createdAt DESC)"
         timestamp updatedAt
-        timestamp deletedAt "제거 예정 — hard delete 정책(§3)"
     }
 
     record_entries {
@@ -153,6 +151,16 @@ erDiagram
         EntrySource source "USER | AI"
         timestamp createdAt
         timestamp updatedAt
+    }
+
+    record_photos {
+        text id PK "uuid(7)"
+        text recordId FK "onDelete: Cascade"
+        date date "INDEX(recordId, date) — entry 와 형제, UNIQUE 없음"
+        bytea data "EXIF·XMP·GPS 부재가 검증된 사본 (docs/11 §3.1)"
+        text mimeType "image/jpeg | image/webp"
+        int size "사용자 총용량 집계용 — data 를 읽지 않고 합산"
+        timestamp createdAt
     }
 
     record_places {
@@ -168,8 +176,14 @@ erDiagram
 ```
 
 스키마 원본: [apps/api/prisma/schema.prisma](../apps/api/prisma/schema.prisma)
-마이그레이션: `apps/api/prisma/migrations/20260815085742_init_auth_schema/`,
-`apps/api/prisma/migrations/20260816121206_add_travel_records/`
+마이그레이션 (적용 순서):
+
+| 마이그레이션                        | 내용                                                    |
+| ----------------------------------- | ------------------------------------------------------- |
+| `20260815085742_init_auth_schema`   | users · social_accounts · refresh_tokens                |
+| `20260816121206_add_travel_records` | records · record_entries · record_places                |
+| `20260904152152_drop_soft_delete`   | `status`·`deletedAt` 컬럼과 `UserStatus` enum 제거 (§3) |
+| `20260904180046_add_record_photos`  | record_photos (docs/11 §3.1)                            |
 
 ## 5. 스키마 결정 근거
 
@@ -214,9 +228,10 @@ erDiagram
 - 응답 후 앱은 저장된 토큰을 폐기한다. 서버 측 refresh 토큰은 cascade로 이미 소멸.
 - 카카오 unlink(admin API, `KAKAO_ADMIN_KEY`)는 후속 검토 — 미연동 시 사용자가 카카오
   계정 설정에서 직접 연결 해제 가능함을 안내.
-- ⚠️ **디자인 공백**: 현재 Figma 설정 화면(46:1245)에는 회원탈퇴 진입점이 없다 — 앱스토어
-  심사는 계정 생성이 있는 앱에 **계정 삭제 기능을 요구**하므로 설정 화면에 탈퇴 항목 추가가
-  필요하다 (디자인 반영 요청).
+- ~~디자인 공백(Figma 설정 화면에 탈퇴 진입점 없음)~~ **해소** — 앱 설정 화면에 "회원 탈퇴"가
+  구현돼 있고, 2단계 확인 다이얼로그 후 이 API를 호출한 뒤 기기 내 기록·사진 사본까지 정리한다
+  (`features/account-withdrawal`). 서버 삭제가 확인되기 전에는 로컬 세션·기록을 보존하고,
+  로컬 정리에 실패하면 다음 실행에서 멱등하게 재시도한다.
 - 출시 체크리스트: Google Play는 앱 내 삭제 외에 **앱 미설치 상태에서도 삭제를 요청할 수 있는
   외부 웹 리소스 URL**을 함께 요구한다
   ([Play 정책](https://support.google.com/googleplay/android-developer/answer/13327111)) —
@@ -272,7 +287,7 @@ prisma CLI + `prisma/migrations`만 담은 일회성 이미지를 만들고, 이
 `v*` 태그를 push하면 [server-publish.yml](../.github/workflows/server-publish.yml)이 다음을 수행한다:
 
 ```txt
-publish → api / migrator 이미지를 GHCR에 push (태그가 아닌 digest로 고정)
+publish → api / migrator 이미지를 GHCR에 push (버전 태그로 참조 — 예: `...-api:1.0.1`)
 release → POST /v1/templates/{id}/runs 로 템플릿 실행 + 결과까지 폴링
              ManualJob            마이그레이션 job 정의(이미지 = ${args.migratorImage})
              JobRun               prisma migrate deploy 실행
@@ -281,7 +296,13 @@ release → POST /v1/templates/{id}/runs 로 템플릿 실행 + 결과까지 폴
 ```
 
 `Condition`이 실패하면 `DeploymentService` 노드가 실행되지 않아 구 버전 앱이 그대로 서비스된다.
-이미지를 태그가 아닌 digest로 넘기므로, 적용된 SQL과 배포된 앱이 같은 커밋임이 보장된다.
+
+**이미지는 digest가 아니라 버전 태그로 넘긴다.** Northflank UI에서 어느 릴리스가 떠 있는지
+바로 읽히는 쪽을 택한 결정이다. 대신 태그는 덮어쓸 수 있으므로 **같은 버전을 다시 태그하지
+않는 것**이 전제이고, 워크플로의 `Verify tag matches package version` 스텝이 `v*` 태그와
+`apps/api/package.json`의 version 일치를 강제해 이 전제를 지킨다(버전을 올려야만 릴리스가 나간다).
+마이그레이션과 앱이 같은 릴리스에서 나온 것은 두 이미지에 같은 버전 태그를 붙여 보장하고,
+사후 추적용 digest는 `Resolve image references` 스텝 로그에 남긴다.
 
 **Northflank 사전 설정**
 
@@ -294,8 +315,9 @@ release → POST /v1/templates/{id}/runs 로 템플릿 실행 + 결과까지 폴
   `ManualJob` 노드가 `updateMode: "put"`(전체 교체) + `"runtimeEnvironment": {}` 이라 다음 템플릿
   실행 때 지워진다. secret group 연결은 job spec 밖의 링크라 유지된다.
 - api 서비스: 템플릿의 `DeploymentService` 노드는 `updateMode: "patch"` 라 **기존 서비스를 찾아
-  이미지만 교체한다 — 서비스를 만들지는 않는다.** 이름이 정확히 `tripic-api` 인 deployment service를
-  먼저 만들어 두어야 하고, 없으면 그 노드가 `Service not found` 로 실패한다.
+  이미지만 교체한다 — 서비스를 만들지는 않는다.** 이름이 템플릿의 노드 이름과 정확히 같은
+  (현재 `tripic`) deployment service를 먼저 만들어 두어야 하고, 없으면 그 노드가
+  `Service not found` 로 실패한다.
   포트 3000/HTTP, health probe `GET /health`, secret group `tripic-secrets` 연결,
   그리고 **자동 배포(auto-deploy)는 끈다** — 켜져 있으면 마이그레이션 완료 전에 새 이미지가 뜰 수 있다.
 - 서비스 필수 환경변수는 [src/config/env.ts](../apps/api/src/config/env.ts) 의 zod 스키마가 부팅 시
@@ -374,6 +396,6 @@ Northflank 실제 검증은 통과하므로 이 경고는 무시한다.
 - [x] Dockerfile: shared build → `prisma generate` → `nest build` — Prisma 7은 엔진 바이너리가 없어
       6에서 우려했던 `pnpm deploy` 재생성 핵과 alpine musl `binaryTargets` 이슈가 사라짐
 
-남은 것: 사진 업로드·AI 일기 API와 방문 관광지 API(위치정보지원센터 검토 후). 여행 기록
-콘텐츠 API는 [11-records-api-design.md](./11-records-api-design.md)의 사진·방문지 제외 범위로
-구현 완료했다.
+남은 것은 **방문 관광지(record_places) API 하나**다 — 위치정보지원센터 검토 통과 후 착수한다.
+여행 기록 콘텐츠 API와 사진 업로드·서빙·삭제 API는 [11-records-api-design.md](./11-records-api-design.md)
+계약대로 구현 완료했고, AI 일기 생성은 구현하지 않기로 결정했다 (같은 문서 §3.2).

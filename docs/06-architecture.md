@@ -33,8 +33,9 @@ flowchart TD
         S3["Notices"]
         S4["Auth / Users"]
         S5["Version Check"]
-        S6["PostgreSQL + Prisma<br/>계정·인증 / 여행 기록 스키마"]
-        S7["GPS·EXIF 포함 원본·KTO 원천 데이터<br/>수신·저장 없음"]
+        S6["Records<br/>기록 콘텐츠 / 일차별 일기 / EXIF 제거 사진"]
+        S7["PostgreSQL + Prisma<br/>계정·인증 / 여행 기록 스키마"]
+        S8["GPS·EXIF 포함 원본·KTO 원천 데이터<br/>수신·저장 없음"]
     end
 
     A --> B --> C --> Q --> D
@@ -98,7 +99,8 @@ P0 서버가 하지 않는 일: GPS 좌표 수신, EXIF 포함 사진 수신, �
 계정 로그인, 기기 간 동기화, 공유 링크, 서버 백업, 관리자 페이지, 서버 AI 해설 저장, 사용자별 통계 저장이 필요하면 서버 범위를 확장한다. PostgreSQL + Prisma + NestJS를 유지하며, 사용자별 장소 기록 서버 저장은 위치정보지원센터 공식 사전 검토 후 진행한다.
 
 > **진행 현황**: 계정 로그인(카카오) 인증 스키마와 사용자 확정 여행 기록 스키마가 PostgreSQL + Prisma로
-> 반영되었다. 여행 기록 중 콘텐츠(제목·일기·해시태그)는 API 설계 완료([11-records-api-design.md](./11-records-api-design.md)),
+> 반영되었다. 여행 기록 중 콘텐츠(제목·일기·해시태그)와 EXIF 제거 사진은 API **구현 완료**
+> ([11-records-api-design.md](./11-records-api-design.md)),
 > 방문 관광지(record_places) API만 위치정보지원센터 사전 검토 후 노출한다.
 > GPS·EXIF·KTO 원천 데이터는 여전히 저장하지 않는다. 상세 설계: [10-auth-db-design.md](./10-auth-db-design.md)
 
@@ -108,7 +110,7 @@ P0 서버가 하지 않는 일: GPS 좌표 수신, EXIF 포함 사진 수신, �
 tripic/
   apps/
     mobile/   # Expo Router 기반 (app/, src/{pages,widgets,features,entities,shared})
-    api/      # NestJS (src/{auth,users,health,app-config,notices,version,prisma})
+    api/      # NestJS (src/{auth,users,records,health,app-config,notices,version,prisma,config,common})
   packages/
     shared/   # types / constants / schemas
     tsconfig/ # 공유 TypeScript 설정
