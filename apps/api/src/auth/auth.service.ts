@@ -2,13 +2,14 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import type { AuthTokens, KakaoLoginResult } from "@tripic/shared";
+import type { AuthTokens, SocialLoginResult } from "@tripic/shared";
 import {
   KAKAO_VERIFIER,
   type KakaoVerifier,
 } from "@/auth/ports/kakao-verifier.port";
 import {
   AUTH_ACCOUNTS,
+  type AuthAccount,
   type AuthAccounts,
 } from "@/auth/ports/auth-accounts.port";
 import {
@@ -16,14 +17,15 @@ import {
   type RefreshTokens,
   type StoredRefreshToken,
 } from "@/auth/ports/refresh-tokens.port";
+import type { SessionIssuer } from "@/auth/ports/session-issuer.port";
 import type { Env } from "@/config/env";
 
 const sha256 = (value: string) =>
   createHash("sha256").update(value).digest("hex");
 
-/** 카카오 로그인/토큰 유스케이스 (docs/10-auth-db-design.md §2–3) — I/O는 port 뒤로 */
+/** 카카오 로그인·세션 토큰 유스케이스 (docs/10-auth-db-design.md §2–3) — I/O는 port 뒤로 */
 @Injectable()
-export class AuthService {
+export class AuthService implements SessionIssuer {
   private readonly accessTtlSec: number;
   private readonly refreshTtlDays: number;
 
@@ -39,15 +41,24 @@ export class AuthService {
   }
 
   /** POST /auth/kakao — 카카오 토큰 검증 후 로그인(없으면 가입) */
-  async loginWithKakao(kakaoAccessToken: string): Promise<KakaoLoginResult> {
+  async loginWithKakao(kakaoAccessToken: string): Promise<SocialLoginResult> {
     const { kakaoUserId } =
       await this.kakao.verifyAccessToken(kakaoAccessToken);
 
     // 탈퇴는 hard delete 라 소셜 계정 행도 함께 사라진다 — 같은 카카오 계정으로
     // 다시 로그인하면 신규 가입으로 처리된다 (docs/10 §3)
-    const { account, isNewUser } =
-      await this.accounts.findOrCreateByKakaoId(kakaoUserId);
+    const { account, isNewUser } = await this.accounts.findOrCreateBySocial({
+      provider: "KAKAO",
+      providerUserId: kakaoUserId,
+    });
+    return this.startSession(account, isNewUser);
+  }
 
+  /** 소셜 계정 확인이 끝난 사용자에게 세션을 발급한다 — 카카오·Apple 로그인 공통 */
+  async startSession(
+    account: AuthAccount,
+    isNewUser: boolean,
+  ): Promise<SocialLoginResult> {
     // 로그인마다 새 rotation family 시작
     const tokens = await this.issueTokens(account.userId, randomUUID());
     return {

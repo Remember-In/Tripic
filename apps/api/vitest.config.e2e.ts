@@ -1,8 +1,14 @@
+import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 import swc from "unplugin-swc";
 
 const srcDir = fileURLToPath(new URL("./src", import.meta.url));
+
+// Apple 키는 부팅 검증(EC 키 파싱)을 통과해야 해서 실행마다 새로 만든다. 실제 Apple 호출은 port stub 으로 막는다
+const appleTestKey = generateKeyPairSync("ec", {
+  namedCurve: "prime256v1",
+}).privateKey.export({ format: "pem", type: "pkcs8" });
 
 // e2e 테스트 (test/**/*.e2e-spec.ts). 부팅된 Nest 앱을 pactum 으로 HTTP 호출.
 // DB 는 globalSetup 이 Testcontainers 로 일회성 Postgres 를 띄운다 (Docker 필요).
@@ -19,6 +25,11 @@ export default defineConfig({
       JWT_ACCESS_TTL_SEC: "900",
       JWT_REFRESH_TTL_DAYS: "30",
       KAKAO_APP_ID: "123456",
+      APPLE_CLIENT_ID: "com.tripic.app",
+      APPLE_TEAM_ID: "TEAM123456",
+      APPLE_KEY_ID: "KEY1234567",
+      APPLE_PRIVATE_KEY: appleTestKey,
+      SOCIAL_TOKEN_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
     },
     testTimeout: 30_000,
     // 최초 실행 시 postgres 이미지 pull 대비

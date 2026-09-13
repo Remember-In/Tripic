@@ -1,3 +1,4 @@
+import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { ConfigService } from "@nestjs/config";
 import {
@@ -8,6 +9,10 @@ import {
 import { buildAppConfig } from "@/app-config/app-config.data";
 import { validateEnv, type Env } from "@/config/env";
 
+const applePrivateKey = generateKeyPairSync("ec", {
+  namedCurve: "prime256v1",
+}).privateKey.export({ format: "pem", type: "pkcs8" });
+
 /** 부팅 경로와 동일하게 env 검증을 통과시킨 뒤 ConfigService 로 감싼다 */
 const configOf = (
   overrides: Record<string, string>,
@@ -17,12 +22,27 @@ const configOf = (
       DATABASE_URL: "postgresql://x:x@127.0.0.1:5432/x",
       JWT_ACCESS_SECRET: "0123456789abcdef0123456789abcdef",
       KAKAO_APP_ID: "123456",
+      APPLE_CLIENT_ID: "com.tripic.app",
+      APPLE_TEAM_ID: "TEAM123456",
+      APPLE_KEY_ID: "KEY1234567",
+      APPLE_PRIVATE_KEY: applePrivateKey,
+      SOCIAL_TOKEN_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
       ...overrides,
     }),
   );
 
 const appConfigOf = (overrides: Record<string, string>) =>
   buildAppConfig(configOf(overrides));
+
+/** Apple env 5종을 모두 비운 서버 (docs/14 §7.1) */
+const configWithoutApple = (): ConfigService<Env, true> =>
+  new ConfigService<Env, true>(
+    validateEnv({
+      DATABASE_URL: "postgresql://x:x@127.0.0.1:5432/x",
+      JWT_ACCESS_SECRET: "0123456789abcdef0123456789abcdef",
+      KAKAO_APP_ID: "123456",
+    }),
+  );
 
 describe("buildAppConfig", () => {
   describe("기본값", () => {
@@ -33,8 +53,14 @@ describe("buildAppConfig", () => {
           maxRadiusM: EXPANDED_RADIUS_M,
           maxCandidates: MAX_CANDIDATES,
         },
-        features: { aiDiary: false, photoUpload: true },
+        features: { aiDiary: false, photoUpload: true, appleLogin: true },
       });
+    });
+
+    it("Apple 설정이 없으면 appleLogin 은 false — 앱이 Apple 버튼을 숨긴다", () => {
+      expect(buildAppConfig(configWithoutApple()).features.appleLogin).toBe(
+        false,
+      );
     });
 
     it("빈 문자열은 미설정과 다르게 취급한다 — 부팅을 막는다", () => {
@@ -105,17 +131,19 @@ describe("buildAppConfig", () => {
       expect(
         appConfigOf({ FEATURE_AI_DIARY: "true", FEATURE_PHOTO_UPLOAD: "false" })
           .features,
-      ).toEqual({ aiDiary: true, photoUpload: false });
+      ).toEqual({ aiDiary: true, photoUpload: false, appleLogin: true });
     });
 
     it("플래그를 각각 독립적으로 켜고 끈다", () => {
       expect(appConfigOf({ FEATURE_AI_DIARY: "true" }).features).toEqual({
         aiDiary: true,
         photoUpload: true,
+        appleLogin: true,
       });
       expect(appConfigOf({ FEATURE_PHOTO_UPLOAD: "false" }).features).toEqual({
         aiDiary: false,
         photoUpload: false,
+        appleLogin: true,
       });
     });
 
@@ -174,6 +202,7 @@ describe("buildAppConfig", () => {
       ]);
       expect(Object.keys(config.features).sort()).toEqual([
         "aiDiary",
+        "appleLogin",
         "photoUpload",
       ]);
     });

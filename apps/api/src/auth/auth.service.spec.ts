@@ -8,6 +8,7 @@ import type { KakaoVerifier } from "@/auth/ports/kakao-verifier.port";
 import type {
   AuthAccount,
   AuthAccounts,
+  SocialIdentity,
 } from "@/auth/ports/auth-accounts.port";
 import type {
   NewRefreshToken,
@@ -28,20 +29,33 @@ const jwtStub = {
   signAsync: vi.fn().mockResolvedValue("signed.jwt"),
 } as unknown as JwtService;
 
+const socialKey = (identity: SocialIdentity) =>
+  `${identity.provider}:${identity.providerUserId}`;
+
 /** port 계약대로 동작하는 in-memory fake (CLAUDE.md: mock 대신 fake) */
 class FakeAuthAccounts implements AuthAccounts {
-  accounts = new Map<string, AuthAccount>(); // kakaoUserId → account
+  accounts = new Map<string, AuthAccount>(); // "PROVIDER:providerUserId" → account
   private seq = 0;
 
-  async findOrCreateByKakaoId(kakaoUserId: string) {
-    const existing = this.accounts.get(kakaoUserId);
+  async findOrCreateBySocial(identity: SocialIdentity) {
+    const existing = this.accounts.get(socialKey(identity));
     if (existing) return { account: existing, isNewUser: false };
     const account: AuthAccount = {
       userId: `user-${++this.seq}`,
       nickname: null,
     };
-    this.accounts.set(kakaoUserId, account);
+    this.accounts.set(socialKey(identity), account);
     return { account, isNewUser: true };
+  }
+
+  async findUserIdBySocial(identity: SocialIdentity) {
+    return this.accounts.get(socialKey(identity))?.userId ?? null;
+  }
+
+  async deleteUser(userId: string) {
+    for (const [key, account] of this.accounts) {
+      if (account.userId === userId) this.accounts.delete(key);
+    }
   }
 }
 
@@ -86,6 +100,12 @@ class FakeRefreshTokens implements RefreshTokens {
     }
   }
 
+  async revokeAllForUser(userId: string) {
+    for (const row of this.rows.values()) {
+      if (row.userId === userId) row.revoked = true;
+    }
+  }
+
   activeCount(familyId: string) {
     return [...this.rows.values()].filter(
       (r) => r.familyId === familyId && !r.revoked,
@@ -127,12 +147,24 @@ describe("AuthService", () => {
     it("탈퇴한 카카오 계정으로 다시 로그인하면 신규 가입으로 처리된다", async () => {
       const first = await service.loginWithKakao("kakao-token");
       // 탈퇴 = 계정 행 삭제 (hard delete)
-      accounts.accounts.delete("999");
+      accounts.accounts.delete("KAKAO:999");
 
       const again = await service.loginWithKakao("kakao-token");
 
       expect(again.isNewUser).toBe(true);
       expect(again.user.id).not.toBe(first.user.id);
+    });
+
+    it("카카오 user id 는 KAKAO provider 계정으로 찾는다 — 같은 id 의 Apple 계정과 섞이지 않는다", async () => {
+      const apple = await accounts.findOrCreateBySocial({
+        provider: "APPLE",
+        providerUserId: "999",
+      });
+
+      const kakao = await service.loginWithKakao("kakao-token");
+
+      expect(kakao.isNewUser).toBe(true);
+      expect(kakao.user.id).not.toBe(apple.account.userId);
     });
   });
 

@@ -106,6 +106,8 @@ export interface AppConfig {
   features: {
     aiDiary: boolean;
     photoUpload: boolean;
+    /** 서버에 Apple 설정이 있어 Apple 로그인이 가능한지 (docs/14 §7.1) */
+    appleLogin: boolean;
   };
 }
 

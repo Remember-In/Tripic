@@ -9,10 +9,18 @@ import {
   meSchema,
 } from "@tripic/shared";
 import { AppModule } from "@/app.module";
+import { APPLE_AUTH_CLIENT } from "@/auth/ports/apple-auth-client.port";
+import { APPLE_IDENTITY_VERIFIER } from "@/auth/ports/apple-identity-verifier.port";
 import {
   KAKAO_VERIFIER,
   type KakaoVerifier,
 } from "@/auth/ports/kakao-verifier.port";
+import {
+  AppleApiStub,
+  appleVerifierStub,
+  loginWithApple,
+  notifyApple,
+} from "./apple-auth-stubs";
 
 /** 카카오 API stub — "valid-<id>" 형태의 토큰만 통과시킨다 (port 교체, CLAUDE.md) */
 const kakaoStub: KakaoVerifier = {
@@ -53,6 +61,10 @@ describe("Auth (e2e)", () => {
     })
       .overrideProvider(KAKAO_VERIFIER)
       .useValue(kakaoStub)
+      .overrideProvider(APPLE_IDENTITY_VERIFIER)
+      .useValue(appleVerifierStub)
+      .overrideProvider(APPLE_AUTH_CLIENT)
+      .useValue(new AppleApiStub())
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -139,6 +151,158 @@ describe("Auth (e2e)", () => {
         .post("/auth/refresh")
         .withJson({ refreshToken: first.refreshToken })
         .expectStatus(200);
+    });
+  });
+
+  describe("POST /auth/apple (docs/14 §3)", () => {
+    it("신규 Apple 계정 → 201, isNewUser=true, nickname null", async () => {
+      const body = await loginWithApple("apple-signup-1");
+
+      expect(body.isNewUser).toBe(true);
+      expect(body.user.nickname).toBeNull();
+    });
+
+    it("같은 Apple 계정 재로그인 → isNewUser=false, 같은 user id", async () => {
+      const first = await loginWithApple("apple-relogin-1");
+      const second = await loginWithApple("apple-relogin-1");
+
+      expect(second.isNewUser).toBe(false);
+      expect(second.user.id).toBe(first.user.id);
+    });
+
+    it("Apple 로 받은 세션도 refresh·로그아웃이 카카오와 똑같이 동작한다", async () => {
+      const body = await loginWithApple("apple-session-1");
+
+      await spec()
+        .post("/auth/refresh")
+        .withJson({ refreshToken: body.refreshToken })
+        .expectStatus(200);
+    });
+
+    it("유효하지 않은 identity token → 401", async () => {
+      await spec()
+        .post("/auth/apple")
+        .withJson({
+          identityToken: "garbage",
+          authorizationCode: "apple-code-apple-bad-1",
+        })
+        .expectStatus(401);
+    });
+
+    it("다른 사용자의 authorization code 를 섞으면 401", async () => {
+      await spec()
+        .post("/auth/apple")
+        .withJson({
+          identityToken: "apple-valid-apple-victim",
+          authorizationCode: "apple-code-apple-attacker",
+        })
+        .expectStatus(401);
+    });
+
+    it("본문 검증 실패 → 400, 빠진 필드를 알려준다", async () => {
+      const body = await spec()
+        .post("/auth/apple")
+        .withJson({ identityToken: "apple-valid-x" })
+        .expectStatus(400)
+        .returns("res.body");
+
+      expect(
+        validationErrorSchema.parse(body).issues.map((issue) => issue.path),
+      ).toContain("authorizationCode");
+    });
+
+    it("같은 식별자라도 카카오 계정과 Apple 계정은 서로 다른 사용자다", async () => {
+      const kakao = await login("valid-cross-provider-1");
+      const apple = await loginWithApple("cross-provider-1");
+
+      expect(apple.isNewUser).toBe(true);
+      expect(apple.user.id).not.toBe(kakao.user.id);
+    });
+
+    it("GET /users/me 는 가입한 로그인 수단을 provider 로 알려준다", async () => {
+      const kakao = await login("valid-provider-kakao");
+      const apple = await loginWithApple("provider-apple");
+
+      const kakaoMe = meSchema.parse(
+        await spec()
+          .get("/users/me")
+          .withBearerToken(kakao.accessToken)
+          .expectStatus(200)
+          .returns("res.body"),
+      );
+      const appleMe = meSchema.parse(
+        await spec()
+          .get("/users/me")
+          .withBearerToken(apple.accessToken)
+          .expectStatus(200)
+          .returns("res.body"),
+      );
+
+      expect(kakaoMe.provider).toBe("KAKAO");
+      expect(appleMe.provider).toBe("APPLE");
+    });
+  });
+
+  describe("POST /auth/apple/notifications (docs/14 §4)", () => {
+    it("공개 라우트다 — Bearer 없이 Apple 서명만으로 받는다", async () => {
+      await notifyApple("email-enabled", "apple-nobody").expectStatus(200);
+    });
+
+    it("payload 가 없으면 400", async () => {
+      await spec()
+        .post("/auth/apple/notifications")
+        .withJson({})
+        .expectStatus(400);
+    });
+
+    it("서명 검증에 실패하면 401", async () => {
+      await spec()
+        .post("/auth/apple/notifications")
+        .withJson({ payload: "forged" })
+        .expectStatus(401);
+    });
+
+    it("consent-revoked → 모든 refresh 토큰이 끊기지만 계정은 남는다", async () => {
+      const phone = await loginWithApple("apple-consent-1");
+      const tablet = await loginWithApple("apple-consent-1");
+
+      await notifyApple("consent-revoked", "apple-consent-1").expectStatus(200);
+
+      await spec()
+        .post("/auth/refresh")
+        .withJson({ refreshToken: phone.refreshToken })
+        .expectStatus(401);
+      await spec()
+        .post("/auth/refresh")
+        .withJson({ refreshToken: tablet.refreshToken })
+        .expectStatus(401);
+
+      // 다시 Apple 로 로그인하면 같은 계정으로 들어온다
+      const again = await loginWithApple("apple-consent-1");
+      expect(again.isNewUser).toBe(false);
+      expect(again.user.id).toBe(phone.user.id);
+    });
+
+    it("account-delete → 계정이 즉시 삭제된다", async () => {
+      const session = await loginWithApple("apple-deleted-1");
+
+      await notifyApple("account-delete", "apple-deleted-1").expectStatus(200);
+
+      await spec()
+        .get("/users/me")
+        .withBearerToken(session.accessToken)
+        .expectStatus(401);
+    });
+
+    it("같은 알림이 두 번 와도 200 이다 (멱등)", async () => {
+      await loginWithApple("apple-duplicate-1");
+
+      await notifyApple("account-delete", "apple-duplicate-1").expectStatus(
+        200,
+      );
+      await notifyApple("account-delete", "apple-duplicate-1").expectStatus(
+        200,
+      );
     });
   });
 

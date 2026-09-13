@@ -1,5 +1,6 @@
 import type { ConfigService } from "@nestjs/config";
 import type { AppConfig } from "@tripic/shared";
+import { readAppleConfig } from "@/config/apple-config";
 import type { Env } from "@/config/env";
 
 /**
@@ -13,6 +14,7 @@ import type { Env } from "@/config/env";
  * 앱이 노출하지 않도록 하는 게 이 스위치의 목적이다.
  * - aiDiary: 비용을 이유로 구현하지 않기로 결정 — 기본 false (docs/11 §3.2)
  * - photoUpload: 업로드·서빙·삭제 API 가 있으므로 기본 true (docs/11 §3.1)
+ * - appleLogin: 플래그가 아니라 Apple env 설정 여부로 결정 — 키 없이 켤 수 없다 (docs/14 §7.1)
  */
 export function buildAppConfig(config: ConfigService<Env, true>): AppConfig {
   return {
@@ -24,6 +26,7 @@ export function buildAppConfig(config: ConfigService<Env, true>): AppConfig {
     features: {
       aiDiary: config.get("FEATURE_AI_DIARY", { infer: true }),
       photoUpload: config.get("FEATURE_PHOTO_UPLOAD", { infer: true }),
+      appleLogin: readAppleConfig(config) !== null,
     },
   };
 }

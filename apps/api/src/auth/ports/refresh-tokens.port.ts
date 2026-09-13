@@ -23,4 +23,6 @@ export interface RefreshTokens {
   /** 기존 토큰이 미사용 상태일 때만 원자적으로 교체. 동시 refresh 경합이면 false */
   rotate(currentId: string, replacement: NewRefreshToken): Promise<boolean>;
   revokeFamily(familyId: string): Promise<void>;
+  /** 사용자의 모든 기기 세션 폐기 (멱등) — Apple 연결 해제 알림 처리용 */
+  revokeAllForUser(userId: string): Promise<void>;
 }

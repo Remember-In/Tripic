@@ -3,6 +3,7 @@ import { PrismaService } from "@/prisma/prisma.service";
 import type {
   AuthAccount,
   AuthAccounts,
+  SocialIdentity,
 } from "@/auth/ports/auth-accounts.port";
 import type { User } from "@/generated/prisma/client";
 
@@ -11,17 +12,20 @@ import type { User } from "@/generated/prisma/client";
 export class PrismaAuthAccountsAdapter implements AuthAccounts {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findOrCreateByKakaoId(
-    kakaoUserId: string,
+  async findOrCreateBySocial(
+    identity: SocialIdentity,
   ): Promise<{ account: AuthAccount; isNewUser: boolean }> {
-    const existing = await this.findByKakaoId(kakaoUserId);
+    const existing = await this.findBySocial(identity);
     if (existing) return { account: existing, isNewUser: false };
 
     try {
       const user = await this.prisma.user.create({
         data: {
           socialAccounts: {
-            create: { provider: "KAKAO", providerUserId: kakaoUserId },
+            create: {
+              provider: identity.provider,
+              providerUserId: identity.providerUserId,
+            },
           },
         },
       });
@@ -29,23 +33,28 @@ export class PrismaAuthAccountsAdapter implements AuthAccounts {
     } catch (error) {
       // 동시 가입 경합: unique(provider, providerUserId) 충돌이면 기존 계정으로 처리
       if (this.isUniqueViolation(error)) {
-        const account = await this.findByKakaoId(kakaoUserId);
+        const account = await this.findBySocial(identity);
         if (account) return { account, isNewUser: false };
       }
       throw error;
     }
   }
 
-  private async findByKakaoId(
-    kakaoUserId: string,
+  async findUserIdBySocial(identity: SocialIdentity): Promise<string | null> {
+    const account = await this.findBySocial(identity);
+    return account?.userId ?? null;
+  }
+
+  async deleteUser(userId: string): Promise<void> {
+    // 멱등 — 없는 행에 P2025 를 던지는 delete 대신 deleteMany
+    await this.prisma.user.deleteMany({ where: { id: userId } });
+  }
+
+  private async findBySocial(
+    identity: SocialIdentity,
   ): Promise<AuthAccount | null> {
     const socialAccount = await this.prisma.socialAccount.findUnique({
-      where: {
-        provider_providerUserId: {
-          provider: "KAKAO",
-          providerUserId: kakaoUserId,
-        },
-      },
+      where: { provider_providerUserId: identity },
       include: { user: true },
     });
     return socialAccount ? this.toAccount(socialAccount.user) : null;
@@ -60,7 +69,7 @@ export class PrismaAuthAccountsAdapter implements AuthAccounts {
       typeof error === "object" &&
       error !== null &&
       "code" in error &&
-      (error as { code?: string }).code === "P2002"
+      error.code === "P2002"
     );
   }
 }

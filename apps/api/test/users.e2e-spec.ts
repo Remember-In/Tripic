@@ -5,10 +5,18 @@ import { request, spec } from "pactum";
 import { z } from "zod";
 import { kakaoLoginResultSchema } from "@tripic/shared";
 import { AppModule } from "@/app.module";
+import { APPLE_AUTH_CLIENT } from "@/auth/ports/apple-auth-client.port";
+import { APPLE_IDENTITY_VERIFIER } from "@/auth/ports/apple-identity-verifier.port";
 import {
   KAKAO_VERIFIER,
   type KakaoVerifier,
 } from "@/auth/ports/kakao-verifier.port";
+import {
+  AppleApiStub,
+  appleVerifierStub,
+  loginWithApple,
+  notifyApple,
+} from "./apple-auth-stubs";
 
 /** 카카오 API stub — "valid-<id>" 형태의 토큰만 통과시킨다 (port 교체, CLAUDE.md) */
 const kakaoStub: KakaoVerifier = {
@@ -38,6 +46,7 @@ const login = async (kakaoToken: string): Promise<LoginBody> =>
 /** 회원탈퇴 — users 행 삭제 + FK cascade 일괄 파기 (docs/10 §3·§6) */
 describe("Users withdrawal (e2e)", () => {
   let app: INestApplication;
+  const appleApi = new AppleApiStub();
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -45,6 +54,10 @@ describe("Users withdrawal (e2e)", () => {
     })
       .overrideProvider(KAKAO_VERIFIER)
       .useValue(kakaoStub)
+      .overrideProvider(APPLE_IDENTITY_VERIFIER)
+      .useValue(appleVerifierStub)
+      .overrideProvider(APPLE_AUTH_CLIENT)
+      .useValue(appleApi)
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -170,6 +183,87 @@ describe("Users withdrawal (e2e)", () => {
       .withBearerToken(session.accessToken)
       .withJson({ nickname: "유령" })
       .expectStatus(401);
+  });
+
+  describe("Apple 계정 탈퇴 — Apple 토큰 revoke 선행 (docs/14 §6)", () => {
+    it("로그인 때 저장한 Apple refresh token 을 복호화해 revoke 한 뒤 삭제한다", async () => {
+      const session = await loginWithApple("apple-withdraw-1");
+
+      await spec()
+        .delete("/users/me")
+        .withBearerToken(session.accessToken)
+        .expectStatus(204);
+
+      expect(appleApi.revoked).toContain("apple-rt-apple-withdraw-1");
+      await spec()
+        .get("/users/me")
+        .withBearerToken(session.accessToken)
+        .expectStatus(401);
+    });
+
+    it("재로그인으로 갱신된 최신 Apple 토큰을 revoke 한다", async () => {
+      await loginWithApple("apple-withdraw-latest");
+      const latest = await loginWithApple("apple-withdraw-latest");
+      appleApi.revoked = [];
+
+      await spec()
+        .delete("/users/me")
+        .withBearerToken(latest.accessToken)
+        .expectStatus(204);
+
+      expect(appleApi.revoked).toEqual(["apple-rt-apple-withdraw-latest"]);
+    });
+
+    it("Apple 장애로 revoke 가 실패하면 502 이고 계정은 그대로 남는다 — 재시도하면 탈퇴된다", async () => {
+      const session = await loginWithApple("apple-withdraw-outage");
+      appleApi.outage = true;
+
+      try {
+        await spec()
+          .delete("/users/me")
+          .withBearerToken(session.accessToken)
+          .expectStatus(502);
+        await spec()
+          .get("/users/me")
+          .withBearerToken(session.accessToken)
+          .expectStatus(200);
+      } finally {
+        appleApi.outage = false;
+      }
+
+      await spec()
+        .delete("/users/me")
+        .withBearerToken(session.accessToken)
+        .expectStatus(204);
+    });
+
+    it("연결 해제(consent-revoked) 후 탈퇴하면 revoke 없이 삭제된다", async () => {
+      const session = await loginWithApple("apple-withdraw-after-consent");
+      await notifyApple(
+        "consent-revoked",
+        "apple-withdraw-after-consent",
+      ).expectStatus(200);
+      appleApi.revoked = [];
+
+      await spec()
+        .delete("/users/me")
+        .withBearerToken(session.accessToken)
+        .expectStatus(204);
+
+      expect(appleApi.revoked).toEqual([]);
+    });
+
+    it("카카오 계정 탈퇴는 Apple 을 호출하지 않는다", async () => {
+      const session = await login("valid-withdraw-kakao-no-apple");
+      appleApi.revoked = [];
+
+      await spec()
+        .delete("/users/me")
+        .withBearerToken(session.accessToken)
+        .expectStatus(204);
+
+      expect(appleApi.revoked).toEqual([]);
+    });
   });
 
   it("탈퇴한 사용자의 남은 access token 으로 다시 탈퇴를 시도하면 401", async () => {
