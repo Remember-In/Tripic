@@ -2,7 +2,7 @@
 
 | 항목      | 내용                                                                                                                         |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| 상태      | 서버 API 구현 (`feat/api-apple-login`) · 모바일 Apple 버튼은 후속 작업                                                       |
+| 상태      | 서버 API 구현 완료 (`feat/api-apple-login`) · 모바일 Apple 버튼은 후속 작업                                                  |
 | 근거      | App Store 심사 대응 — Guideline 4.8(로그인 서비스), 5.1.1(v)(계정 삭제), TN3194(토큰 revoke), 2026 한국 개발자 알림 요구사항 |
 | 선행 문서 | [10-auth-db-design.md](./10-auth-db-design.md) — 토큰 전략·hard delete 정책은 카카오와 동일하게 공유한다                     |
 | 핵심 제약 | 서버는 **캐시를 두지 않는다** — Apple 공개키(JWKS)는 검증마다 조회하고, client_secret은 호출마다 새로 서명한다               |
@@ -176,10 +176,10 @@ erDiagram
 ## 10. 체크리스트
 
 - [x] 설계 문서(이 문서)와 10·07·법무 문서 갱신
-- [ ] `AuthProvider.APPLE` + `apple_credentials` 테이블 마이그레이션
-- [ ] `POST /auth/apple` — JWKS 검증, code 교환, sub 일치, 토큰 암호화 저장
-- [ ] `POST /auth/apple/notifications` — 서명 검증, `consent-revoked`·`account-delete` 처리
-- [ ] `DELETE /users/me` — Apple revoke 선행, 실패 시 502
-- [ ] 단위 테스트(어댑터 fetch stub, 서비스 in-memory fake) + e2e(Apple 포트 stub)
+- [x] `AuthProvider.APPLE` + `apple_credentials` 테이블 마이그레이션
+- [x] `POST /auth/apple` — JWKS 검증, code 교환, sub 일치, 토큰 암호화 저장
+- [x] `POST /auth/apple/notifications` — 서명 검증, `consent-revoked`·`account-delete` 처리
+- [x] `DELETE /users/me` — Apple revoke 선행, 실패 시 502
+- [x] 단위 테스트(어댑터 fetch stub, 서비스 in-memory fake) + e2e(Apple 포트 stub)
 - [ ] Apple Developer 설정(§8)과 Northflank secret 등록
 - [ ] 모바일 Apple 버튼 연동 후 TestFlight에서 로그인·탈퇴 revoke·알림 수신 실기기 확인

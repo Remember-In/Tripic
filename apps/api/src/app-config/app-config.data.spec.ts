@@ -1,3 +1,4 @@
+import { generateKeyPairSync, randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { ConfigService } from "@nestjs/config";
 import {
@@ -8,6 +9,10 @@ import {
 import { buildAppConfig } from "@/app-config/app-config.data";
 import { validateEnv, type Env } from "@/config/env";
 
+const applePrivateKey = generateKeyPairSync("ec", {
+  namedCurve: "prime256v1",
+}).privateKey.export({ format: "pem", type: "pkcs8" });
+
 /** 부팅 경로와 동일하게 env 검증을 통과시킨 뒤 ConfigService 로 감싼다 */
 const configOf = (
   overrides: Record<string, string>,
@@ -17,6 +22,11 @@ const configOf = (
       DATABASE_URL: "postgresql://x:x@127.0.0.1:5432/x",
       JWT_ACCESS_SECRET: "0123456789abcdef0123456789abcdef",
       KAKAO_APP_ID: "123456",
+      APPLE_CLIENT_ID: "com.tripic.app",
+      APPLE_TEAM_ID: "TEAM123456",
+      APPLE_KEY_ID: "KEY1234567",
+      APPLE_PRIVATE_KEY: applePrivateKey,
+      SOCIAL_TOKEN_ENCRYPTION_KEY: randomBytes(32).toString("base64"),
       ...overrides,
     }),
   );

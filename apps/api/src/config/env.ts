@@ -1,9 +1,24 @@
+import { createPrivateKey } from "node:crypto";
 import {
   DEFAULT_RADIUS_M,
   EXPANDED_RADIUS_M,
   MAX_CANDIDATES,
 } from "@tripic/shared";
 import { z } from "zod";
+
+/** 한 줄 env 로 넣은 PEM 의 `\n` 이스케이프를 실제 줄바꿈으로 되돌린다 */
+const unescapeNewlines = (value: string) => value.replace(/\\n/g, "\n");
+
+const isEcPrivateKey = (pem: string): boolean => {
+  try {
+    return createPrivateKey(pem).asymmetricKeyType === "ec";
+  } catch {
+    return false;
+  }
+};
+
+/** base64 로 인코딩한 정확히 32바이트 — `openssl rand -base64 32` 출력 형식 */
+const BASE64_32_BYTES = /^[A-Za-z0-9+/]{43}=$/;
 
 /**
  * 불리언 환경변수 — `true`/`false` 두 가지만 받는다.
@@ -28,6 +43,28 @@ export const envSchema = z.object({
   JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
   /** 카카오 앱 app_id — 타 카카오 앱 토큰 차단용. 필수 (미설정 시 부팅 실패) */
   KAKAO_APP_ID: z.coerce.number().int().positive(),
+
+  /**
+   * Sign in with Apple (docs/14-apple-login-design.md §7). 전부 필수 — 미설정 시 부팅 실패.
+   * APPLE_CLIENT_ID 는 App ID bundle id 로 identity token 의 aud 와 대조한다.
+   */
+  APPLE_CLIENT_ID: z.string().min(1),
+  APPLE_TEAM_ID: z.string().min(1),
+  APPLE_KEY_ID: z.string().min(1),
+  /** Sign in with Apple 키(.p8) PEM — 파싱 불가하거나 EC 키가 아니면 부팅 실패 */
+  APPLE_PRIVATE_KEY: z
+    .string()
+    .min(1)
+    .transform(unescapeNewlines)
+    .refine(
+      isEcPrivateKey,
+      "APPLE_PRIVATE_KEY must be an EC private key (.p8)",
+    ),
+  /** Apple refresh token 암호화 키 (AES-256-GCM, docs/14 §5) */
+  SOCIAL_TOKEN_ENCRYPTION_KEY: z
+    .string()
+    .regex(BASE64_32_BYTES, "must be 32 bytes encoded as base64"),
+
   PORT: z.coerce.number().int().default(3000),
 
   /**
