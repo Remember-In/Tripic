@@ -126,7 +126,7 @@ export function HomePage() {
     if (!ownerKey) {
       Alert.alert(
         "기록을 열 수 없어요",
-        "로그인 상태를 확인한 뒤 다시 시도해 주세요.",
+        "기록 저장공간을 준비한 뒤 다시 시도해 주세요.",
       );
       return;
     }

@@ -10,6 +10,7 @@
       "expo-router",
       "expo-sqlite",
       "expo-secure-store",
+      "expo-apple-authentication",
       [
         "expo-build-properties",
         {
@@ -35,6 +36,7 @@
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.tripic.app",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }

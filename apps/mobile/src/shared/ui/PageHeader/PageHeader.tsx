@@ -3,7 +3,7 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import type { SvgProps } from "react-native-svg";
 
 import { BackIcon } from "@/shared/assets/icons";
-import { spacing } from "@/shared/config/theme";
+import { spacing, type TypographyVariant } from "@/shared/config/theme";
 import { AppText } from "@/shared/ui/AppText";
 import { FloatingIconButton } from "@/shared/ui/FloatingIconButton";
 
@@ -14,6 +14,7 @@ export type PageHeaderProps = {
   onBackPress: () => void;
   style?: StyleProp<ViewStyle>;
   title: string;
+  titleVariant?: TypographyVariant;
 };
 
 export function PageHeader({
@@ -23,6 +24,7 @@ export function PageHeader({
   onBackPress,
   style,
   title,
+  titleVariant = "heading01",
 }: PageHeaderProps) {
   return (
     <View style={[styles.header, style]}>
@@ -35,7 +37,7 @@ export function PageHeader({
         <AppText
           lineBreakStrategyIOS="hangul-word"
           style={styles.title}
-          variant="heading01"
+          variant={titleVariant}
         >
           {title}
         </AppText>

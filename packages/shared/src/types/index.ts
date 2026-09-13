@@ -111,6 +111,7 @@ export interface AppConfig {
   /** 미구현/미승인 기능의 앱 노출 차단 스위치 */
   features: {
     aiDiary: boolean;
+    appleLogin: boolean;
     photoUpload: boolean;
   };
 }

@@ -109,7 +109,7 @@ export function RecordComposePage() {
     if (!ownerKey) {
       Alert.alert(
         "기록을 저장할 수 없어요",
-        "로그인 상태 확인이 끝난 뒤 다시 시도해 주세요.",
+        "기록 저장공간 준비가 끝난 뒤 다시 시도해 주세요.",
       );
       return;
     }

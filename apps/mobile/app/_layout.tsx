@@ -46,7 +46,6 @@ function LocalRecordScope({ children }: PropsWithChildren) {
   useEffect(() => {
     void (async () => {
       try {
-        // 탈퇴 완료가 확인된 계정의 기록 정리를 먼저 복구해야 사진 정리 큐가 완성된다.
         await recoverPendingWithdrawalCleanupOnAppStart();
       } finally {
         await flushAllQueuedPhotoCleanup();
@@ -58,15 +57,11 @@ function LocalRecordScope({ children }: PropsWithChildren) {
     let active = true;
     void readLastLocalUserId()
       .then((userId) => {
-        if (active) {
-          setLastUserId(userId);
-        }
+        if (active) setLastUserId(userId);
       })
       .catch(() => undefined)
       .finally(() => {
-        if (active) {
-          setOwnerRestored(true);
-        }
+        if (active) setOwnerRestored(true);
       });
 
     return () => {
@@ -81,7 +76,7 @@ function LocalRecordScope({ children }: PropsWithChildren) {
       return;
     }
 
-    if (status === "unauthenticated") {
+    if (status === "unauthenticated" || status === "guest") {
       setLastUserId(null);
       void clearLastLocalUserId().catch(() => undefined);
     }
@@ -91,7 +86,7 @@ function LocalRecordScope({ children }: PropsWithChildren) {
     if (status === "authenticated" && user) {
       return createUserLocalRecordOwnerKey(user.id);
     }
-    if (status === "unauthenticated") {
+    if (status === "guest") {
       return GUEST_LOCAL_RECORD_OWNER_KEY;
     }
     if (status === "unavailable" && isOwnerRestored && lastUserId) {
