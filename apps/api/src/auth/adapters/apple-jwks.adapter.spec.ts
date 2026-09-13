@@ -1,9 +1,7 @@
 import { generateKeyPairSync, sign, type KeyObject } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BadGatewayException, UnauthorizedException } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { AppleJwksAdapter } from "@/auth/adapters/apple-jwks.adapter";
-import type { Env } from "@/config/env";
 
 const CLIENT_ID = "com.tripic.app";
 const ISSUER = "https://appleid.apple.com";
@@ -68,9 +66,7 @@ describe("AppleJwksAdapter", () => {
     // Response 본문은 한 번만 읽을 수 있어 호출마다 새로 만든다
     fetchMock = vi.fn(async () => jsonResponse(200, jwksBody));
     vi.stubGlobal("fetch", fetchMock);
-    adapter = new AppleJwksAdapter(
-      new ConfigService<Env, true>({ APPLE_CLIENT_ID: CLIENT_ID }),
-    );
+    adapter = new AppleJwksAdapter({ clientId: CLIENT_ID });
   });
 
   afterEach(() => {

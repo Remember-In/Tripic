@@ -1,16 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { InternalServerErrorException } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { AesGcmTokenCipherAdapter } from "@/auth/adapters/aes-gcm-token-cipher.adapter";
-import type { Env } from "@/config/env";
 
 const cipherWithKey = (key: Buffer) =>
-  new AesGcmTokenCipherAdapter(
-    new ConfigService<Env, true>({
-      SOCIAL_TOKEN_ENCRYPTION_KEY: key.toString("base64"),
-    }),
-  );
+  new AesGcmTokenCipherAdapter(key.toString("base64"));
 
 describe("AesGcmTokenCipherAdapter", () => {
   const cipher = cipherWithKey(randomBytes(32));

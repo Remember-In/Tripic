@@ -1,8 +1,6 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import { Injectable, InternalServerErrorException } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
+import { InternalServerErrorException } from "@nestjs/common";
 import type { ProviderTokenCipher } from "@/auth/ports/provider-token-cipher.port";
-import type { Env } from "@/config/env";
 
 const ALGORITHM = "aes-256-gcm";
 const VERSION = "v1";
@@ -10,14 +8,11 @@ const IV_BYTES = 12;
 const AUTH_TAG_BYTES = 16;
 
 /** AES-256-GCM 암복호화 adapter — 저장 형식 `v1.<iv>.<authTag>.<ciphertext>` (docs/14 §5) */
-@Injectable()
 export class AesGcmTokenCipherAdapter implements ProviderTokenCipher {
   private readonly key: Buffer;
 
-  constructor(config: ConfigService<Env, true>) {
-    const encodedKey: string = config.get("SOCIAL_TOKEN_ENCRYPTION_KEY", {
-      infer: true,
-    });
+  /** @param encodedKey base64 32바이트 — env 검증을 통과한 SOCIAL_TOKEN_ENCRYPTION_KEY */
+  constructor(encodedKey: string) {
     this.key = Buffer.from(encodedKey, "base64");
   }
 

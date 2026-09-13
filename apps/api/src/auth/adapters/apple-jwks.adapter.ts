@@ -1,9 +1,4 @@
-import {
-  BadGatewayException,
-  Injectable,
-  UnauthorizedException,
-} from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
+import { BadGatewayException, UnauthorizedException } from "@nestjs/common";
 import { z } from "zod";
 import {
   APPLE_ISSUER,
@@ -15,7 +10,7 @@ import type {
   AppleIdentityVerifier,
   AppleNotificationEvent,
 } from "@/auth/ports/apple-identity-verifier.port";
-import type { Env } from "@/config/env";
+import type { AppleConfig } from "@/config/apple-config";
 
 const APPLE_KEYS_URL = `${APPLE_ISSUER}/auth/keys`;
 const APPLE_TIMEOUT_MS = 5_000;
@@ -60,13 +55,13 @@ const notificationClaimsSchema = z.object({
 /**
  * Apple 서명 JWT 검증 outbound adapter (docs/14 §3.1·§4).
  * 서버에 캐시 계층을 두지 않으므로 공개키(JWKS)는 검증할 때마다 조회한다.
+ * Apple 설정이 있을 때만 생성된다 — 배선은 auth/apple-adapters.ts (docs/14 §7.1).
  */
-@Injectable()
 export class AppleJwksAdapter implements AppleIdentityVerifier {
   private readonly clientId: string;
 
-  constructor(config: ConfigService<Env, true>) {
-    this.clientId = config.get("APPLE_CLIENT_ID", { infer: true });
+  constructor(apple: Pick<AppleConfig, "clientId">) {
+    this.clientId = apple.clientId;
   }
 
   async verifyIdentityToken(

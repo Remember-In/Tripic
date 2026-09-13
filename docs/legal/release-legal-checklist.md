@@ -127,7 +127,8 @@
 - [ ] Apple 계정 탈퇴 시 서버가 Apple 토큰을 revoke하는지 TestFlight 실기기로 확인한다 (TN3194, docs/14 §6).
 - [ ] Apple Developer App ID에 server-to-server 알림 endpoint
       `https://tripic.remin.dev/auth/apple/notifications` 를 등록한다 (docs/14 §8).
-- [ ] Northflank secret group에 Apple env 5종을 서버 릴리스 **전에** 등록한다 (docs/14 §7).
+- [ ] Northflank secret group에 Apple env 5종을 **한꺼번에** 등록하고, `GET /app-config` 의
+      `features.appleLogin` 이 `true` 인지 확인한 뒤 심사 빌드를 제출한다 (docs/14 §7.1).
 - [ ] App Privacy 답변의 식별자 항목에 Apple 사용자 식별자(User ID)를 반영한다.
 
 ## 6. Google Play 제출

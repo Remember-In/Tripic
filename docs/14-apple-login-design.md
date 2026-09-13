@@ -140,10 +140,12 @@ erDiagram
 | Apple 계정 + `apple_credentials` 없음(`consent-revoked` 후) | revoke 생략하고 삭제                                                                                   |
 | Apple 장애/timeout                                          | **`502`, 삭제하지 않음** — 앱은 원격 삭제 실패 시 로컬 데이터를 보존하므로 사용자가 재시도한다         |
 | 토큰 복호화 실패(키 설정 오류)                              | `500`, 삭제하지 않음 — 운영자가 키 설정을 바로잡아야 하는 장애로 취급한다                              |
+| Apple 미설정 서버(§7.1) + 저장된 토큰 있음                  | `503`, 삭제하지 않음 — revoke 할 수단이 없으므로 설정을 복구한 뒤 탈퇴한다                             |
 
 ## 7. 환경 변수
 
-모두 **필수**다. 미설정·형식 오류 시 서버 부팅이 실패한다 ([src/config/env.ts](../apps/api/src/config/env.ts)).
+아래 5개는 **전부 설정하거나 전부 비워야 한다** ([src/config/env.ts](../apps/api/src/config/env.ts)).
+일부만 설정했거나 값의 형식이 틀리면(EC 키가 아님, 32바이트 키가 아님) 설정 실수로 보고 **서버 부팅이 실패**한다.
 
 | 변수                          | 용도                                                                            |
 | ----------------------------- | ------------------------------------------------------------------------------- |
@@ -153,6 +155,23 @@ erDiagram
 | `APPLE_PRIVATE_KEY`           | 해당 키의 .p8 PEM 전문. 한 줄 env면 줄바꿈을 `\n` 으로 넣는다                   |
 | `SOCIAL_TOKEN_ENCRYPTION_KEY` | Apple refresh token 암호화 키 — `openssl rand -base64 32`                       |
 
+### 7.1 Apple 미설정 모드
+
+5개를 모두 비우면 서버는 정상 기동하고 **Apple 로그인만 비활성화**된다. Apple 키 발급 전에도 다른 서버 변경을
+배포할 수 있게 하기 위해서다. 서비스 코드는 그대로 두고, 부팅 시 설정 여부에 따라 Apple 포트에 실제 어댑터 대신
+비활성 어댑터를 연결한다.
+
+| 기능                                    | Apple 미설정 시 동작                                                               |
+| --------------------------------------- | ---------------------------------------------------------------------------------- |
+| `POST /auth/apple`                      | `503` — 신규 가입·로그인 모두 불가                                                 |
+| `POST /auth/apple/notifications`        | `503` — Apple 이 재시도하므로 설정 복구 후 처리된다                                |
+| `DELETE /users/me`                      | 카카오 계정은 정상 탈퇴. Apple 토큰이 저장된 계정만 `503`(§6)                      |
+| `GET /app-config` `features.appleLogin` | `false` — 앱은 Apple 로그인 버튼을 숨긴다 ([13](./13-operations-api-design.md) §2) |
+| 카카오 로그인·기록 등 나머지 API        | 영향 없음                                                                          |
+
+> ⚠️ 카카오 로그인만 노출한 빌드로 App Store 심사를 받으면 Guideline 4.8 대상이다. 미설정 모드는 키 발급 전
+> 서버 배포를 막지 않기 위한 운영 상태이지, 카카오 단독 로그인 출시를 허용하는 수단이 아니다.
+
 ## 8. Apple Developer 설정 (runbook)
 
 1. **Identifiers → App ID `com.tripic.app`** → Capabilities에서 **Sign in with Apple** 체크 →
@@ -161,8 +180,8 @@ erDiagram
 2. **Keys → +** → **Sign in with Apple** 체크 → Configure에서 primary App ID `com.tripic.app` 선택 →
    등록 후 **.p8을 즉시 다운로드**(재다운로드 불가) → Key ID 기록.
 3. **Membership details**에서 Team ID 확인.
-4. Northflank `tripic-secrets` secret group에 §7 변수 5개를 추가한다. **변수 추가가 이 기능을 담은 릴리스보다
-   먼저**여야 한다 — 누락되면 새 이미지가 부팅에 실패한다.
+4. Northflank `tripic-secrets` secret group에 §7 변수 5개를 **한꺼번에** 추가하고 서버를 재시작한다. 추가 전에는
+   §7.1 미설정 모드로 동작하고, 일부만 추가하면 부팅이 실패한다.
 5. 프로비저닝 프로파일은 EAS가 capability 변경을 반영해 재생성한다(모바일 작업 시 확인).
 
 ## 9. 모바일 연동 계약 (후속 작업 참고)
@@ -171,6 +190,7 @@ erDiagram
 - `AppleAuthentication.signInAsync({ requestedScopes: [] })` → `identityToken`·`authorizationCode`를
   `appleLoginSchema`(`@tripic/shared`)로 검증해 `POST /auth/apple`에 보낸다. 응답은 `socialLoginResultSchema`.
 - 로그인 화면은 Apple HIG에 맞는 공식 버튼(`AppleAuthenticationButton`)을 카카오 버튼과 **동등한 크기·위치**로 둔다(4.8).
+- `GET /app-config`의 `features.appleLogin`이 `false`면 Apple 버튼을 숨긴다(§7.1).
 - `GET /users/me` 응답의 `provider`로 설정 화면의 "카카오/Apple 계정으로 로그인됨"을 구분한다.
 
 ## 10. 체크리스트
@@ -181,5 +201,6 @@ erDiagram
 - [x] `POST /auth/apple/notifications` — 서명 검증, `consent-revoked`·`account-delete` 처리
 - [x] `DELETE /users/me` — Apple revoke 선행, 실패 시 502
 - [x] 단위 테스트(어댑터 fetch stub, 서비스 in-memory fake) + e2e(Apple 포트 stub)
+- [x] Apple 미설정 모드(§7.1) — env 전부/전무 검증, 비활성 어댑터, `features.appleLogin`
 - [ ] Apple Developer 설정(§8)과 Northflank secret 등록
 - [ ] 모바일 Apple 버튼 연동 후 TestFlight에서 로그인·탈퇴 revoke·알림 수신 실기기 확인

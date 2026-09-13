@@ -257,14 +257,14 @@ erDiagram
 
 ## 7. 환경 변수
 
-| 변수                     | 용도                                                                                        | 상태 |
-| ------------------------ | ------------------------------------------------------------------------------------------- | ---- |
-| `DATABASE_URL`           | PostgreSQL 접속 문자열                                                                      | 사용 |
-| `JWT_ACCESS_SECRET`      | JWT 서명 키 (32자 이상)                                                                     | 사용 |
-| `JWT_ACCESS_TTL_SEC`     | access token 수명 (기본 900)                                                                | 사용 |
-| `JWT_REFRESH_TTL_DAYS`   | refresh token 수명 (기본 30)                                                                | 사용 |
-| `KAKAO_APP_ID`           | access_token_info의 app_id 대조용 (필수)                                                    | 사용 |
-| `APPLE_CLIENT_ID` 외 4종 | Apple 토큰 검증·교환·revoke, Apple 토큰 암호화 (필수) — [14](./14-apple-login-design.md) §7 | 사용 |
+| 변수                     | 용도                                                                                                                                         | 상태 |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| `DATABASE_URL`           | PostgreSQL 접속 문자열                                                                                                                       | 사용 |
+| `JWT_ACCESS_SECRET`      | JWT 서명 키 (32자 이상)                                                                                                                      | 사용 |
+| `JWT_ACCESS_TTL_SEC`     | access token 수명 (기본 900)                                                                                                                 | 사용 |
+| `JWT_REFRESH_TTL_DAYS`   | refresh token 수명 (기본 30)                                                                                                                 | 사용 |
+| `KAKAO_APP_ID`           | access_token_info의 app_id 대조용 (필수)                                                                                                     | 사용 |
+| `APPLE_CLIENT_ID` 외 4종 | Apple 토큰 검증·교환·revoke, Apple 토큰 암호화 (전부 설정 또는 전부 비움 — 비우면 Apple 로그인 비활성) — [14](./14-apple-login-design.md) §7 | 사용 |
 
 `/app-config` 응답값도 환경변수로 덮을 수 있다 (전부 선택, 기본값은 코드에 있음) —
 `KTO_DEFAULT_RADIUS_M`·`KTO_MAX_RADIUS_M`·`KTO_MAX_CANDIDATES`·`FEATURE_AI_DIARY`·
@@ -339,8 +339,9 @@ release → POST /v1/templates/{id}/runs 로 템플릿 실행 + 결과까지 폴
   포트 3000/HTTP, health probe `GET /health`, secret group `tripic-secrets` 연결,
   그리고 **자동 배포(auto-deploy)는 끈다** — 켜져 있으면 마이그레이션 완료 전에 새 이미지가 뜰 수 있다.
 - 서비스 필수 환경변수는 [src/config/env.ts](../apps/api/src/config/env.ts) 의 zod 스키마가 부팅 시
-  강제한다: `DATABASE_URL`, `JWT_ACCESS_SECRET`(32자 이상), `KAKAO_APP_ID`(양의 정수), Apple 5종
-  (`APPLE_CLIENT_ID`·`APPLE_TEAM_ID`·`APPLE_KEY_ID`·`APPLE_PRIVATE_KEY`·`SOCIAL_TOKEN_ENCRYPTION_KEY`, [14](./14-apple-login-design.md) §7).
+  강제한다: `DATABASE_URL`, `JWT_ACCESS_SECRET`(32자 이상), `KAKAO_APP_ID`(양의 정수).
+  Apple 5종(`APPLE_CLIENT_ID`·`APPLE_TEAM_ID`·`APPLE_KEY_ID`·`APPLE_PRIVATE_KEY`·`SOCIAL_TOKEN_ENCRYPTION_KEY`)은
+  전부 설정하거나 전부 비워야 하며, 비우면 Apple 로그인만 비활성화된다 ([14](./14-apple-login-design.md) §7.1).
   나머지(`JWT_ACCESS_TTL_SEC`·`JWT_REFRESH_TTL_DAYS`·`PORT`)는 기본값이 있다.
 - GHCR 패키지는 public으로 둔다(레포가 공개이므로 이미지만 숨길 실익이 없다). 그래서 템플릿에
   registry credentials를 넣지 않는다. private으로 바꾸면 각 external 이미지에 `credentials`를 추가해야 한다.

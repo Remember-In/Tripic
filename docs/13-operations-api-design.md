@@ -52,6 +52,7 @@ PRD 6.4의 후보 조회 기준을 릴리스 없이 조정할 수 있게 원격�
   "features": {
     "aiDiary": false, // AI 일기 생성 — 비용을 이유로 구현하지 않기로 결정 (docs/11 §3.2)
     "photoUpload": true, // 사진 업로드 — 업로드·서빙·삭제 API 구현 완료 (docs/11 §3.1)
+    "appleLogin": true, // Apple 로그인 — Apple env 5종 설정 여부로 결정 (docs/14 §7.1)
   },
 }
 ```
@@ -59,6 +60,10 @@ PRD 6.4의 후보 조회 기준을 릴리스 없이 조정할 수 있게 원격�
 기능 플래그는 **해당 서버 API 가 실제로 존재할 때** `true` 로 뒤집는다 — 없는 엔드포인트를 앱이
 노출하지 않게 막는 것이 이 스위치의 목적이다. 앱이 아직 그 API 를 쓰지 않더라도, 붙이는 시점에
 서버를 다시 배포하지 않도록 API 존재 여부만 반영한다.
+
+`appleLogin` 은 환경변수 플래그가 아니라 **Apple 설정(env 5종)이 있는지로 결정**된다 — 키 없이 켜면
+`/auth/apple` 이 `503` 을 주는 버튼이 앱에 노출되므로 따로 켜고 끌 수 없게 했다
+([14-apple-login-design.md](./14-apple-login-design.md) §7.1).
 
 `aiDiary` 는 뒤집힐 일이 없다 — AI 일기 생성은 **구현하지 않기로 결정**했다
 ([11-records-api-design.md](./11-records-api-design.md) §3.2). 앱이 이미 읽고 있는 필드라

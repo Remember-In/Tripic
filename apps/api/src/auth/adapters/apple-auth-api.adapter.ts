@@ -1,14 +1,9 @@
 import { createPrivateKey, type KeyObject } from "node:crypto";
-import {
-  BadGatewayException,
-  Injectable,
-  UnauthorizedException,
-} from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
+import { BadGatewayException, UnauthorizedException } from "@nestjs/common";
 import { z } from "zod";
 import { APPLE_ISSUER, decodeJws, signEs256 } from "@/auth/adapters/apple-jwt";
 import type { AppleAuthClient } from "@/auth/ports/apple-auth-client.port";
-import type { Env } from "@/config/env";
+import type { AppleConfig } from "@/config/apple-config";
 
 const APPLE_TIMEOUT_MS = 5_000;
 /** client_secret 수명 — 호출마다 새로 서명하므로 짧게 둔다 (docs/14 §3.2) */
@@ -24,20 +19,19 @@ const idTokenClaimsSchema = z.object({ sub: z.string().min(1) });
 const errorResponseSchema = z.object({ error: z.string() });
 
 /** Apple REST API outbound adapter — `/auth/token` 교환과 `/auth/revoke` (docs/14 §3·§6) */
-@Injectable()
 export class AppleAuthApiAdapter implements AppleAuthClient {
   private readonly clientId: string;
   private readonly teamId: string;
   private readonly keyId: string;
   private readonly privateKey: KeyObject;
 
-  constructor(config: ConfigService<Env, true>) {
-    this.clientId = config.get("APPLE_CLIENT_ID", { infer: true });
-    this.teamId = config.get("APPLE_TEAM_ID", { infer: true });
-    this.keyId = config.get("APPLE_KEY_ID", { infer: true });
-    this.privateKey = createPrivateKey(
-      config.get("APPLE_PRIVATE_KEY", { infer: true }),
-    );
+  constructor(
+    apple: Pick<AppleConfig, "clientId" | "teamId" | "keyId" | "privateKey">,
+  ) {
+    this.clientId = apple.clientId;
+    this.teamId = apple.teamId;
+    this.keyId = apple.keyId;
+    this.privateKey = createPrivateKey(apple.privateKey);
   }
 
   async exchangeAuthorizationCode(

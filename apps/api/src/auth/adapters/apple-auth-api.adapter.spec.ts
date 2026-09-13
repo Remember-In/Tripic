@@ -1,22 +1,19 @@
 import { generateKeyPairSync, verify } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { BadGatewayException, UnauthorizedException } from "@nestjs/common";
-import { ConfigService } from "@nestjs/config";
 import { z } from "zod";
 import { AppleAuthApiAdapter } from "@/auth/adapters/apple-auth-api.adapter";
-import type { Env } from "@/config/env";
 
 const appleKey = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
 
-const config = new ConfigService<Env, true>({
-  APPLE_CLIENT_ID: "com.tripic.app",
-  APPLE_TEAM_ID: "TEAM123456",
-  APPLE_KEY_ID: "KEY1234567",
-  APPLE_PRIVATE_KEY: appleKey.privateKey.export({
-    format: "pem",
-    type: "pkcs8",
-  }),
-});
+const config = {
+  clientId: "com.tripic.app",
+  teamId: "TEAM123456",
+  keyId: "KEY1234567",
+  privateKey: appleKey.privateKey
+    .export({ format: "pem", type: "pkcs8" })
+    .toString(),
+};
 
 const jsonResponse = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {

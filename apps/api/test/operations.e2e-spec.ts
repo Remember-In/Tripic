@@ -22,7 +22,11 @@ const appConfigSchema = z.object({
     maxRadiusM: z.number().int().positive(),
     maxCandidates: z.number().int().positive(),
   }),
-  features: z.object({ aiDiary: z.boolean(), photoUpload: z.boolean() }),
+  features: z.object({
+    aiDiary: z.boolean(),
+    photoUpload: z.boolean(),
+    appleLogin: z.boolean(),
+  }),
 });
 
 const noticesSchema = z.array(
@@ -118,12 +122,16 @@ describe("Operations API (e2e)", () => {
       );
     });
 
-    it("AI 일기는 꺼져 있고 사진 업로드는 켜져 있다 (현재 서버가 가진 기능)", async () => {
+    it("AI 일기는 꺼져 있고 사진 업로드·Apple 로그인은 켜져 있다 (현재 서버가 가진 기능)", async () => {
       const body = appConfigSchema.parse(
         await spec().get("/app-config").expectStatus(200).returns("res.body"),
       );
 
-      expect(body.features).toEqual({ aiDiary: false, photoUpload: true });
+      expect(body.features).toEqual({
+        aiDiary: false,
+        photoUpload: true,
+        appleLogin: true,
+      });
     });
 
     it("계약에 없는 키를 덧붙이지 않는다", async () => {
