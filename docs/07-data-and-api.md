@@ -114,16 +114,19 @@ Tripic 서버에 업로드·저장하지 않는다. P0 서버는 앱 설정·공
 
 ### 14.3 P1 인증·기록 API
 
-| API                | 역할                                                       |
-| ------------------ | ---------------------------------------------------------- |
-| POST /auth/kakao   | 카카오 토큰 검증 후 Tripic 세션 발급                       |
-| POST /auth/refresh | refresh token rotation                                     |
-| POST /auth/logout  | refresh token family 폐기                                  |
-| GET /users/me      | 내 프로필 조회                                             |
-| PATCH /users/me    | 닉네임 수정                                                |
-| DELETE /users/me   | 회원탈퇴 — 즉시 hard delete (연관 데이터 cascade 파기)     |
-| /records 계열      | 사용자 확정 기록 콘텐츠 + 일차별 일기·사진 API (구현 완료) |
+| API                            | 역할                                                       |
+| ------------------------------ | ---------------------------------------------------------- |
+| POST /auth/kakao               | 카카오 토큰 검증 후 Tripic 세션 발급                       |
+| POST /auth/apple               | Apple identity token 검증·code 교환 후 Tripic 세션 발급    |
+| POST /auth/apple/notifications | Apple 계정 상태 알림(연결 해제·계정 삭제) 수신             |
+| POST /auth/refresh             | refresh token rotation                                     |
+| POST /auth/logout              | refresh token family 폐기                                  |
+| GET /users/me                  | 내 프로필 조회                                             |
+| PATCH /users/me                | 닉네임 수정                                                |
+| DELETE /users/me               | 회원탈퇴 — Apple 토큰 revoke 후 즉시 hard delete (cascade) |
+| /records 계열                  | 사용자 확정 기록 콘텐츠 + 일차별 일기·사진 API (구현 완료) |
 
-인증·사용자 API의 현재 계약은 [10-auth-db-design.md](./10-auth-db-design.md), 기록·사진 API는
+인증·사용자 API의 현재 계약은 [10-auth-db-design.md](./10-auth-db-design.md)(Apple 로그인은
+[14-apple-login-design.md](./14-apple-login-design.md)), 기록·사진 API는
 [11-records-api-design.md](./11-records-api-design.md)를 따른다. `record_places` API는
 [12-location-law.md](./12-location-law.md)의 사전 검토 게이트를 통과하기 전까지 노출하지 않는다.
