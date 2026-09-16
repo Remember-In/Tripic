@@ -1,6 +1,13 @@
 import { useRouter, type Href } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import {
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 
 import {
   TOTAL_KTO_REGION_COUNT,
@@ -243,6 +250,25 @@ export function HomePage() {
                     pressed && styles.pressed,
                   ]}
                 >
+                  {record.photo ? (
+                    <Image
+                      accessibilityLabel={`${record.title} 대표 사진`}
+                      resizeMode="cover"
+                      source={record.photo}
+                      style={styles.recentCardPhoto}
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.recentCardPhoto,
+                        styles.recentCardPhotoPlaceholder,
+                      ]}
+                    >
+                      <AppText tone="placeholder" variant="caption02">
+                        사진 없음
+                      </AppText>
+                    </View>
+                  )}
                   <View style={styles.recentCardText}>
                     <AppText
                       numberOfLines={1}
@@ -357,6 +383,17 @@ const styles = StyleSheet.create({
   recentCardText: {
     flex: 1,
     gap: spacing.xxs,
+  },
+  recentCardPhoto: {
+    borderRadius: radii.small,
+    height: 48,
+    overflow: "hidden",
+    width: 48,
+  },
+  recentCardPhotoPlaceholder: {
+    alignItems: "center",
+    backgroundColor: semanticColors.background.canvas,
+    justifyContent: "center",
   },
   recentState: {
     alignItems: "center",

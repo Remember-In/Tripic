@@ -160,6 +160,11 @@ describe("SqliteLocalTravelRecordRepository cleanup and ordering", () => {
     expect(summaryQuery).toContain(
       "ORDER BY COALESCE(end_date, record.created_at) DESC,",
     );
+    expect(summaryQuery).toContain("WHERE day.record_id = record.id");
+    expect(summaryQuery).toContain(
+      "ORDER BY day.day_index ASC, photo.sort_order ASC",
+    );
+    expect(summaryQuery).toContain("LIMIT 1) AS cover_photo_uri");
     expect(summaryQuery).toContain("record.created_at DESC,");
     expect(summaryQuery).toContain("record.id DESC;");
   });

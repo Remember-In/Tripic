@@ -13,8 +13,6 @@ import {
 import { getRegionByAreaCode } from "@/entities/region";
 import {
   fetchKtoPlaceDetail,
-  fetchKtoPlaceImages,
-  normalizeTouristImageUrl,
   touristPlaceQueryKeys,
 } from "@/entities/tourist-place";
 import type { UpdateLocalTravelRecordInput } from "@/entities/travel-record";
@@ -70,31 +68,6 @@ export function RecordDetailPage() {
     retry: 1,
     staleTime: 0,
   });
-  const placeImagesQuery = useQuery({
-    enabled: Boolean(contentId),
-    gcTime: 0,
-    queryFn: ({ signal }) =>
-      contentId ? fetchKtoPlaceImages(contentId, { signal }) : [],
-    queryKey: contentId
-      ? touristPlaceQueryKeys.images(contentId)
-      : (["tourist-place", "images", "pending"] as const),
-    retry: 1,
-    staleTime: 0,
-  });
-
-  const galleryImages = useMemo(
-    () =>
-      (placeImagesQuery.data ?? []).flatMap((image) => {
-        const originalUrl = normalizeTouristImageUrl(image.originalUrl);
-        const thumbnailUrl = normalizeTouristImageUrl(image.thumbnailUrl);
-
-        return originalUrl
-          ? [{ originalUrl, ...(thumbnailUrl ? { thumbnailUrl } : {}) }]
-          : [];
-      }),
-    [placeImagesQuery.data],
-  );
-
   const record = useMemo(
     () =>
       localRecord
@@ -127,7 +100,6 @@ export function RecordDetailPage() {
 
   const retryPlaceInformation = () => {
     void placeQuery.refetch();
-    void placeImagesQuery.refetch();
   };
 
   const goBack = () => {
@@ -312,22 +284,17 @@ export function RecordDetailPage() {
 
       {selectedPlace ? (
         <PlaceInfoSheet
-          galleryImages={galleryImages}
-          imageInformationUnavailable={placeImagesQuery.isError}
           informationUnavailable={
             placeQuery.isError ||
             (placeQuery.isSuccess && placeQuery.data === null)
           }
-          isRefreshing={placeQuery.isFetching || placeImagesQuery.isFetching}
+          isRefreshing={placeQuery.isFetching}
           onClose={() => setSelectedPhoto(null)}
           onDelete={confirmPlaceDelete}
           onEdit={openPlaceEdit}
           onRetry={retryPlaceInformation}
           overview={placeQuery.data?.overview}
           place={selectedPlace}
-          representativeImageUrl={normalizeTouristImageUrl(
-            placeQuery.data?.imageUrl ?? placeQuery.data?.thumbnailUrl,
-          )}
           visible={Boolean(selectedPhoto)}
         />
       ) : null}

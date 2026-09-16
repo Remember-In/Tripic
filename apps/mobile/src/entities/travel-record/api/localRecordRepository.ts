@@ -33,6 +33,7 @@ type RecordRow = {
 };
 
 type RecordSummaryRow = RecordRow & {
+  cover_photo_uri: string | null;
   day_count: number;
   end_date: string | null;
   photo_count: number;
@@ -817,6 +818,13 @@ export class SqliteLocalTravelRecordRepository implements LocalTravelRecordRepos
                    WHERE day.record_id = record.id) AS start_date,
                   (SELECT MAX(day.visit_date) FROM local_record_days AS day
                    WHERE day.record_id = record.id) AS end_date,
+                  (SELECT photo.local_uri
+                   FROM local_record_photos AS photo
+                   INNER JOIN local_record_days AS day ON day.id = photo.day_id
+                   WHERE day.record_id = record.id
+                     AND photo.local_uri IS NOT NULL
+                   ORDER BY day.day_index ASC, photo.sort_order ASC
+                   LIMIT 1) AS cover_photo_uri,
                   (SELECT COUNT(*)
                    FROM local_record_photos AS photo
                    INNER JOIN local_record_days AS day ON day.id = photo.day_id
@@ -868,6 +876,7 @@ export class SqliteLocalTravelRecordRepository implements LocalTravelRecordRepos
 
       return recordRows.map((row) => ({
         areaCodes: areaCodesByRecord.get(row.id) ?? [],
+        coverPhotoUri: row.cover_photo_uri,
         createdAt: row.created_at,
         dayCount: row.day_count,
         endDate: row.end_date,

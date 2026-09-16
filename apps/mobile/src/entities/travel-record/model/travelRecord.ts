@@ -7,6 +7,7 @@ export type RecordFilter = "recent" | "region";
 export type TravelRecordSummary = {
   dateRange: string;
   id: string;
+  photo?: ImageSourcePropType;
   /** Phase 3 record-places data is not part of the records content API. */
   regions?: string;
   title: string;
