@@ -52,9 +52,13 @@ export function LoginPage() {
         <p className="login-description">
           여행 사진을 기록하고, 방문한 지역에 나만의 스탬프를 남겨보세요.
         </p>
-        <button className="kakao-button" type="button" onClick={login}>
-          <span aria-hidden="true">●</span>
-          카카오로 시작하기
+        <button
+          aria-label="카카오 로그인"
+          className="kakao-button"
+          type="button"
+          onClick={login}
+        >
+          <img alt="" aria-hidden="true" src="/kakao-login-ko-large-wide.png" />
         </button>
         {error ? (
           <p className="form-error" role="alert">

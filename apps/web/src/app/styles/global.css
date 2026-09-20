@@ -245,9 +245,17 @@ button:disabled {
 }
 .kakao-button {
   width: 100%;
-  color: #191600;
-  background: #fee500;
-  gap: 10px;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 12px;
+  line-height: 0;
+}
+.kakao-button img {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 .primary-button {
   width: 100%;
