@@ -257,14 +257,16 @@ erDiagram
 
 ## 7. 환경 변수
 
-| 변수                     | 용도                                                                                                                                         | 상태 |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
-| `DATABASE_URL`           | PostgreSQL 접속 문자열                                                                                                                       | 사용 |
-| `JWT_ACCESS_SECRET`      | JWT 서명 키 (32자 이상)                                                                                                                      | 사용 |
-| `JWT_ACCESS_TTL_SEC`     | access token 수명 (기본 900)                                                                                                                 | 사용 |
-| `JWT_REFRESH_TTL_DAYS`   | refresh token 수명 (기본 30)                                                                                                                 | 사용 |
-| `KAKAO_APP_ID`           | access_token_info의 app_id 대조용 (필수)                                                                                                     | 사용 |
-| `APPLE_CLIENT_ID` 외 4종 | Apple 토큰 검증·교환·revoke, Apple 토큰 암호화 (전부 설정 또는 전부 비움 — 비우면 Apple 로그인 비활성) — [14](./14-apple-login-design.md) §7 | 사용 |
+| 변수                                                | 용도                                                                                                                                            | 상태 |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| `DATABASE_URL`                                      | PostgreSQL 접속 문자열                                                                                                                          | 사용 |
+| `JWT_ACCESS_SECRET`                                 | JWT 서명 키 (32자 이상)                                                                                                                         | 사용 |
+| `JWT_ACCESS_TTL_SEC`                                | access token 수명 (기본 900)                                                                                                                    | 사용 |
+| `JWT_REFRESH_TTL_DAYS`                              | refresh token 수명 (기본 30)                                                                                                                    | 사용 |
+| `KAKAO_APP_ID`                                      | access_token_info의 app_id 대조용 (필수)                                                                                                        | 사용 |
+| `APPLE_CLIENT_ID` 외 4종                            | Apple 토큰 검증·교환·revoke, Apple 토큰 암호화 (전부 설정 또는 전부 비움 — 비우면 Apple 로그인 비활성) — [14](./14-apple-login-design.md) §7    | 사용 |
+| `KAKAO_WEB_REST_API_KEY`, `KAKAO_WEB_REDIRECT_URIS` | 웹 카카오 로그인의 authorization code 교환 (둘 다 설정 또는 둘 다 비움 — 비우면 웹 로그인만 비활성) — [15](./15-web-client-server-design.md) §2 | 사용 |
+| `KAKAO_WEB_CLIENT_SECRET`                           | 카카오 콘솔에서 Client Secret 을 켠 경우에만 — 선택                                                                                             | 사용 |
 
 `/app-config` 응답값도 환경변수로 덮을 수 있다 (전부 선택, 기본값은 코드에 있음) —
 `KTO_DEFAULT_RADIUS_M`·`KTO_MAX_RADIUS_M`·`KTO_MAX_CANDIDATES`·`FEATURE_AI_DIARY`·

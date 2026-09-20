@@ -1,14 +1,32 @@
-import { Body, Controller, HttpCode, Post } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  HttpCode,
+  Post,
+  Req,
+  Res,
+  UnauthorizedException,
+} from "@nestjs/common";
+import type { Request, Response } from "express";
 import {
   appleLoginSchema,
   appleNotificationSchema,
   kakaoLoginSchema,
+  kakaoWebLoginSchema,
   refreshTokenSchema,
   type AppleLoginInput,
   type AppleNotificationInput,
   type KakaoLoginInput,
+  type KakaoWebLoginInput,
   type RefreshTokenInput,
+  type WebAuthTokens,
+  type WebSocialLoginResult,
 } from "@tripic/shared";
+import {
+  REFRESH_COOKIE_NAME,
+  REFRESH_COOKIE_OPTIONS,
+  readRefreshCookie,
+} from "@/auth/web-session-cookie";
 import { AppleAuthService } from "@/auth/apple-auth.service";
 import { AuthService } from "@/auth/auth.service";
 import { CurrentUser } from "@/auth/current-user.decorator";
@@ -29,6 +47,69 @@ export class AuthController {
     @Body(new ZodValidationPipe(kakaoLoginSchema)) body: KakaoLoginInput,
   ) {
     return this.auth.loginWithKakao(body.kakaoAccessToken);
+  }
+
+  /**
+   * POST /auth/kakao/web — 웹 카카오 로그인 (201, docs/15 §2).
+   * refresh token 은 본문이 아니라 HttpOnly 쿠키로만 내려간다 — 웹은 저장할 안전한 곳이 없다.
+   */
+  @Public()
+  @Post("kakao/web")
+  async loginWithKakaoWeb(
+    @Body(new ZodValidationPipe(kakaoWebLoginSchema)) body: KakaoWebLoginInput,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<WebSocialLoginResult> {
+    const { refreshToken, ...session } =
+      await this.auth.loginWithKakaoWebCode(body);
+    response.cookie(REFRESH_COOKIE_NAME, refreshToken, REFRESH_COOKIE_OPTIONS);
+    return session;
+  }
+
+  /** POST /auth/refresh/web — 쿠키의 refresh token 을 rotation (200, docs/15 §3) */
+  @Public()
+  @Post("refresh/web")
+  @HttpCode(200)
+  async refreshWeb(
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<WebAuthTokens> {
+    const presented = readRefreshCookie(request.headers.cookie);
+    if (!presented) {
+      response.clearCookie(REFRESH_COOKIE_NAME, REFRESH_COOKIE_OPTIONS);
+      throw new UnauthorizedException("missing refresh token");
+    }
+
+    let rotated;
+    try {
+      rotated = await this.auth.refresh(presented);
+    } catch (error) {
+      // 죽은 쿠키를 남기면 웹이 같은 토큰으로 무한 재시도한다
+      response.clearCookie(REFRESH_COOKIE_NAME, REFRESH_COOKIE_OPTIONS);
+      throw error;
+    }
+
+    const { refreshToken, ...tokens } = rotated;
+    response.cookie(REFRESH_COOKIE_NAME, refreshToken, REFRESH_COOKIE_OPTIONS);
+    return tokens;
+  }
+
+  /**
+   * POST /auth/logout/web — 쿠키의 refresh token family 를 revoke (204, docs/15 §3).
+   * 쿠키 유무와 관계없이 지우고 204 로 끝낸다 — 로그아웃은 멱등해야 한다.
+   * 남의 토큰으로는 끊지 못한다(소유권 검사는 AuthService.logout 이 한다).
+   */
+  @Post("logout/web")
+  @HttpCode(204)
+  async logoutWeb(
+    @CurrentUser() userId: string,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<void> {
+    const presented = readRefreshCookie(request.headers.cookie);
+    if (presented) {
+      await this.auth.logout(userId, presented);
+    }
+    response.clearCookie(REFRESH_COOKIE_NAME, REFRESH_COOKIE_OPTIONS);
   }
 
   /** POST /auth/apple — Apple identity token 검증 + code 교환 로그인/가입 (201, docs/14 §3) */

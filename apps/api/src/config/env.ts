@@ -21,6 +21,28 @@ const isEcPrivateKey = (pem: string): boolean => {
 const BASE64_32_BYTES = /^[A-Za-z0-9+/]{43}=$/;
 
 /**
+ * redirect uri 허용목록에 담을 수 있는 값인지 확인한다.
+ * URL 형식만 보면 `javascript:` 같은 스킴이 통과하므로 http(s) 로 좁힌다.
+ */
+const isHttpUrl = (value: string): boolean => {
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "http:" || protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * 한 기능의 자격증명 묶음은 전부 설정하거나 전부 비워야 한다.
+ * 일부만 설정된 상태는 "꺼짐"과 구분되지 않아 조용히 오작동하므로 부팅 단계에서 막는다.
+ */
+const isAllOrNone = (values: readonly unknown[]): boolean => {
+  const configured = values.filter((value) => value !== undefined).length;
+  return configured === 0 || configured === values.length;
+};
+
+/**
  * 불리언 환경변수 — `true`/`false` 두 가지만 받는다.
  * zod 의 stringbool 은 `yes`·`on`·`y`·`enabled` 까지 받아들여 표기가 제각각이 되므로 쓰지 않는다.
  * 표기를 좁혀두면 `on` 처럼 애매한 값이 조용히 통과하지 않고 부팅 단계에서 드러난다.
@@ -69,6 +91,38 @@ export const envSchema = z
       .regex(BASE64_32_BYTES, "must be 32 bytes encoded as base64")
       .optional(),
 
+    /**
+     * 웹 카카오 로그인 (docs/15 §2). REST 키와 redirect uri 허용목록을 전부 넣거나 전부 비운다 —
+     * 전부 비우면 웹 카카오 로그인만 비활성화된 채 기동하고, 일부만 넣으면 부팅 실패.
+     * REST 키는 KAKAO_APP_ID 와 **같은 카카오 애플리케이션**의 것이어야 한다.
+     * 다른 앱의 키를 넣으면 교환한 토큰이 access_token_info 의 app_id 대조에서 걸려 401 이 된다.
+     */
+    KAKAO_WEB_REST_API_KEY: z.string().min(1).optional(),
+    /**
+     * 쉼표로 구분한 허용목록 — 운영 도메인과 로컬 Vite 를 함께 담는다.
+     * 웹이 보낸 redirect_uri 를 이 목록과 대조해, 공격자가 임의 주소로 code 를 교환하지 못하게 한다.
+     */
+    KAKAO_WEB_REDIRECT_URIS: z
+      .string()
+      .min(1)
+      .transform((value) =>
+        value
+          .split(",")
+          .map((uri) => uri.trim())
+          .filter((uri) => uri.length > 0),
+      )
+      .refine(
+        (uris) => uris.length > 0,
+        "KAKAO_WEB_REDIRECT_URIS must contain at least one redirect uri",
+      )
+      .refine(
+        (uris) => uris.every(isHttpUrl),
+        "KAKAO_WEB_REDIRECT_URIS must contain only http(s) urls",
+      )
+      .optional(),
+    /** 카카오 콘솔에서 Client Secret 을 활성화한 경우에만 설정한다 */
+    KAKAO_WEB_CLIENT_SECRET: z.string().min(1).optional(),
+
     PORT: z.coerce.number().int().default(3000),
 
     /**
@@ -95,19 +149,41 @@ export const envSchema = z
     FEATURE_PHOTO_UPLOAD: booleanFlag(true),
   })
   .superRefine((env, ctx) => {
-    const values = [
-      env.APPLE_CLIENT_ID,
-      env.APPLE_TEAM_ID,
-      env.APPLE_KEY_ID,
-      env.APPLE_PRIVATE_KEY,
-      env.SOCIAL_TOKEN_ENCRYPTION_KEY,
-    ];
-    const configured = values.filter((value) => value !== undefined).length;
-    if (configured > 0 && configured < values.length) {
+    if (
+      !isAllOrNone([
+        env.APPLE_CLIENT_ID,
+        env.APPLE_TEAM_ID,
+        env.APPLE_KEY_ID,
+        env.APPLE_PRIVATE_KEY,
+        env.SOCIAL_TOKEN_ENCRYPTION_KEY,
+      ])
+    ) {
       ctx.addIssue({
         code: "custom",
         message:
           "APPLE_CLIENT_ID, APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY, SOCIAL_TOKEN_ENCRYPTION_KEY must be set together or all left empty",
+      });
+    }
+
+    if (
+      !isAllOrNone([env.KAKAO_WEB_REST_API_KEY, env.KAKAO_WEB_REDIRECT_URIS])
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "KAKAO_WEB_REST_API_KEY, KAKAO_WEB_REDIRECT_URIS must be set together or all left empty",
+      });
+    }
+
+    // client secret 은 카카오 콘솔에서 켰을 때만 필요한 선택 항목이라 위 묶음에 넣지 않는다.
+    // 다만 REST 키 없이 홀로 남으면 쓰이지 못한 채 설정만 남으므로 설정 실수로 본다.
+    if (
+      env.KAKAO_WEB_CLIENT_SECRET !== undefined &&
+      env.KAKAO_WEB_REST_API_KEY === undefined
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "KAKAO_WEB_CLIENT_SECRET requires KAKAO_WEB_REST_API_KEY",
       });
     }
   });

@@ -15,6 +15,9 @@ import { APPLE_AUTH_CLIENT } from "@/auth/ports/apple-auth-client.port";
 import { APPLE_CREDENTIALS } from "@/auth/ports/apple-credentials.port";
 import { APPLE_IDENTITY_VERIFIER } from "@/auth/ports/apple-identity-verifier.port";
 import { KAKAO_VERIFIER } from "@/auth/ports/kakao-verifier.port";
+import { KAKAO_AUTH_CLIENT } from "@/auth/ports/kakao-auth-client.port";
+import { selectKakaoAuthClient } from "@/auth/kakao-adapters";
+import { readKakaoWebConfig } from "@/config/kakao-web-config";
 import { AUTH_ACCOUNTS } from "@/auth/ports/auth-accounts.port";
 import { PROVIDER_TOKEN_CIPHER } from "@/auth/ports/provider-token-cipher.port";
 import { REFRESH_TOKENS } from "@/auth/ports/refresh-tokens.port";
@@ -47,6 +50,14 @@ import { SOCIAL_ACCOUNT_UNLINKER } from "@/users/ports/social-account-unlinker.p
     { provide: SESSION_ISSUER, useExisting: AuthService },
     // outbound ports → adapters (확장은 provider 교체로)
     { provide: KAKAO_VERIFIER, useClass: KakaoApiAdapter },
+    // 카카오 웹 env 가 없으면 비활성 adapter 가 붙어 웹 로그인만 503 이 된다 (docs/15 §2).
+    // 네이티브 /auth/kakao 는 KAKAO_VERIFIER 만 쓰므로 영향받지 않는다.
+    {
+      provide: KAKAO_AUTH_CLIENT,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Env, true>) =>
+        selectKakaoAuthClient(readKakaoWebConfig(config)),
+    },
     { provide: AUTH_ACCOUNTS, useClass: PrismaAuthAccountsAdapter },
     { provide: REFRESH_TOKENS, useClass: PrismaRefreshTokensAdapter },
     // Apple env 가 없으면 비활성 adapter 가 붙어 Apple 기능만 503 이 된다 (docs/14 §7.1)
