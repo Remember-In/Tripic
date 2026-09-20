@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  fetchKtoPlaceDetail,
+  fetchKtoPlaceImages,
   fetchKtoPlacesByArea,
   fetchNearbyKtoPlaces,
+  KtoApiError,
   searchKtoPlaces,
 } from "./client";
 
@@ -57,7 +60,8 @@ describe("fetchKtoPlacesByArea", () => {
     const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
     const url = new URL(requestUrl);
     expect(url.pathname).toBe("/B551011/KorService2/areaBasedList2");
-    expect(url.searchParams.get("areaCode")).toBe("1");
+    expect(url.searchParams.get("lDongRegnCd")).toBe("11");
+    expect(url.searchParams.has("areaCode")).toBe(false);
     expect(url.searchParams.get("numOfRows")).toBe("3");
     expect(places).toHaveLength(3);
   });
@@ -74,6 +78,83 @@ describe("fetchKtoPlacesByArea", () => {
 
     const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
     expect(new URL(requestUrl).searchParams.has("areaCode")).toBe(false);
+    expect(new URL(requestUrl).searchParams.has("lDongRegnCd")).toBe(false);
+  });
+
+  it("uses the legal district code when one legacy district is selected", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(successfulListPayload(1)), { status: 200 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchKtoPlacesByArea({ areaCode: "1", sigunguCode: "1" });
+
+    const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
+    const url = new URL(requestUrl);
+    expect(url.searchParams.get("lDongRegnCd")).toBe("11");
+    expect(url.searchParams.get("lDongSignguCd")).toBe("680");
+    expect(url.searchParams.has("sigunguCode")).toBe(false);
+  });
+
+  it("splits the shared legal area into the selected product region", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          response: {
+            body: {
+              items: {
+                item: [
+                  {
+                    contentid: "1",
+                    lDongRegnCd: "12",
+                    lDongSignguCd: "210",
+                    title: "광주 관광지",
+                  },
+                  {
+                    contentid: "2",
+                    lDongRegnCd: "12",
+                    lDongSignguCd: "170",
+                    title: "전남 관광지",
+                  },
+                ],
+              },
+            },
+            header: { resultCode: "0000", resultMsg: "OK" },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      fetchKtoPlacesByArea({ areaCode: "5" }, { maxCandidates: 3 }),
+    ).resolves.toEqual([
+      expect.objectContaining({ areaCode: "5", sigunguCode: "3" }),
+    ]);
+
+    const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
+    const url = new URL(requestUrl);
+    expect(url.searchParams.get("lDongRegnCd")).toBe("12");
+    expect(url.searchParams.get("numOfRows")).toBe("50");
+  });
+
+  it("uses the current legal code when an Incheon district is selected", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(successfulListPayload(0)), { status: 200 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchKtoPlacesByArea({ areaCode: "2", sigunguCode: "290" });
+
+    const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
+    const url = new URL(requestUrl);
+    expect(url.searchParams.get("lDongRegnCd")).toBe("28");
+    expect(url.searchParams.get("lDongSignguCd")).toBe("290");
   });
 
   it("does not start a request when the caller already canceled it", async () => {
@@ -86,6 +167,72 @@ describe("fetchKtoPlacesByArea", () => {
       fetchKtoPlacesByArea({}, { signal: controller.signal }),
     ).rejects.toMatchObject({ code: "ABORTED" });
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("KorService2 region code compatibility", () => {
+  it("maps a legal-district-only response to the persisted travel map keys", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          response: {
+            body: {
+              items: {
+                item: {
+                  addr1: "서울특별시 강남구",
+                  contentid: "1",
+                  lDongRegnCd: "11",
+                  lDongSignguCd: "680",
+                  title: "강남 관광지",
+                },
+              },
+            },
+            header: { resultCode: "0000", resultMsg: "OK" },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchKtoPlaces("강남")).resolves.toEqual([
+      expect.objectContaining({
+        areaCode: "1",
+        legalAreaCode: "11",
+        legalSigunguCode: "680",
+        sigunguCode: "1",
+      }),
+    ]);
+  });
+
+  it("falls back to legacy fields for a not-yet-mapped legal district", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          response: {
+            body: {
+              items: {
+                item: {
+                  areacode: "2",
+                  contentid: "1",
+                  lDongRegnCd: "28",
+                  lDongSignguCd: "999",
+                  sigungucode: "10",
+                  title: "인천 관광지",
+                },
+              },
+            },
+            header: { resultCode: "0000", resultMsg: "OK" },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchKtoPlaces("인천")).resolves.toEqual([
+      expect.objectContaining({ areaCode: "2", sigunguCode: "10" }),
+    ]);
   });
 });
 
@@ -166,4 +313,154 @@ describe("nearby KTO radius limits", () => {
       );
     },
   );
+});
+
+describe("KorService2 detail request parameters", () => {
+  it("requests detailCommon2 with only contentId and common parameters", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          response: {
+            body: {
+              items: {
+                item: {
+                  contentid: "126508",
+                  title: "경복궁",
+                },
+              },
+            },
+            header: { resultCode: "0000", resultMsg: "OK" },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchKtoPlaceDetail("126508");
+
+    const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
+    const url = new URL(requestUrl);
+    expect(url.pathname).toBe("/B551011/KorService2/detailCommon2");
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      MobileApp: "Tripic",
+      MobileOS: "ETC",
+      _type: "json",
+      contentId: "126508",
+      serviceKey: "test-key",
+    });
+  });
+
+  it("requests detailImage2 without the removed subImageYN parameter", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify(successfulListPayload(0)), { status: 200 }),
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchKtoPlaceImages("126508");
+
+    const requestUrl = String(fetchMock.mock.calls[0]?.[0]);
+    const url = new URL(requestUrl);
+    expect(url.pathname).toBe("/B551011/KorService2/detailImage2");
+    expect(url.searchParams.get("contentId")).toBe("126508");
+    expect(url.searchParams.get("imageYN")).toBe("Y");
+    expect(url.searchParams.get("numOfRows")).toBe("10");
+    expect(url.searchParams.get("pageNo")).toBe("1");
+    expect(url.searchParams.has("subImageYN")).toBe(false);
+  });
+});
+
+describe("KTO API errors", () => {
+  it("throws KtoApiError for a flat KorService2 error response", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          responseTime: "2026-09-05T12:34:56",
+          resultCode: "05",
+          resultMsg: "INVALID REQUEST PARAMETER ERROR",
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchKtoPlaces("경복궁")).rejects.toEqual(
+      expect.objectContaining<KtoApiError>({
+        code: "05",
+        message: "INVALID REQUEST PARAMETER ERROR",
+        name: "KtoApiError",
+      }),
+    );
+  });
+
+  it("keeps handling nested TourAPI response header errors", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          response: {
+            body: {},
+            header: { resultCode: "30", resultMsg: "SERVICE KEY ERROR" },
+          },
+        }),
+        { status: 200 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchKtoPlaces("경복궁")).rejects.toMatchObject({
+      code: "30",
+      message: "SERVICE KEY ERROR",
+      name: "KtoApiError",
+    });
+  });
+
+  it("prioritizes the OpenAPI gateway JSON error over its HTTP status", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          OpenAPI_ServiceResponse: {
+            cmmMsgHeader: {
+              errMsg: "SERVICE ERROR",
+              returnAuthMsg: "SERVICE_KEY_IS_NOT_REGISTERED_ERROR",
+              returnReasonCode: "30",
+            },
+          },
+        }),
+        { status: 403 },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchKtoPlaces("경복궁")).rejects.toMatchObject({
+      code: "30",
+      message: "SERVICE_KEY_IS_NOT_REGISTERED_ERROR",
+      name: "KtoApiError",
+    });
+  });
+
+  it("falls back to the HTTP status for a non-JSON error response", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("Forbidden", { status: 403 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchKtoPlaces("경복궁")).rejects.toMatchObject({
+      code: "HTTP_403",
+      name: "KtoApiError",
+    });
+  });
+
+  it("reports a malformed successful response separately", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("not-json", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(searchKtoPlaces("경복궁")).rejects.toMatchObject({
+      code: "INVALID_RESPONSE",
+      name: "KtoApiError",
+    });
+  });
 });

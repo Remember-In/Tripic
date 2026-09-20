@@ -28,8 +28,4 @@ export type DraftVisit = {
   place: TouristPlaceCandidate;
 };
 
-export type RecordVoiceTheme = "documentary" | "emotional" | "friendly";
-
-export type RecordTripTheme = "nature" | "history" | "food" | "completion";
-
 export type LocationSearchDecision = "undecided" | "nearby" | "manual";

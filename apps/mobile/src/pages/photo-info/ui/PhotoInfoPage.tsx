@@ -5,6 +5,8 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -370,192 +372,204 @@ export function PhotoInfoPage() {
       <View style={styles.container}>
         <PageHeader onBackPress={() => router.back()} title="사진 정보 수정" />
 
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          keyboardVerticalOffset={Platform.OS === "ios" ? spacing.lg : 0}
+          style={styles.keyboardView}
         >
-          <View style={styles.photoIntro}>
-            {selectedPhoto ? (
-              <Image source={selectedPhoto.source} style={styles.photo} />
-            ) : (
-              <View style={[styles.photo, styles.photoPlaceholder]} />
-            )}
-            <AppText variant="body01">
-              이 사진과 관련된 정보를 골라주세요.
-            </AppText>
-          </View>
-
-          <View style={styles.form}>
-            <View style={styles.field}>
-              <AppText
-                style={styles.fieldLabel}
-                tone="tertiary"
-                variant="subtitle03"
-              >
-                방문 일자
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardDismissMode={
+              Platform.OS === "ios" ? "interactive" : "on-drag"
+            }
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+            style={styles.scrollView}
+          >
+            <View style={styles.photoIntro}>
+              {selectedPhoto ? (
+                <Image source={selectedPhoto.source} style={styles.photo} />
+              ) : (
+                <View style={[styles.photo, styles.photoPlaceholder]} />
+              )}
+              <AppText style={styles.photoIntroText} variant="body01">
+                이 사진과 관련된 정보를 골라주세요.
               </AppText>
-              <Pressable
-                accessibilityLabel="방문 일자 변경"
-                accessibilityRole="button"
-                onPress={() => setDateSheetVisible(true)}
-                style={({ pressed }) => [
-                  styles.datePill,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <AppText variant="button04">
-                  {formatDisplayDate(photoDate)}
-                </AppText>
-              </Pressable>
             </View>
 
-            <View style={styles.field}>
-              <AppText
-                style={styles.fieldLabel}
-                tone="tertiary"
-                variant="subtitle03"
-              >
-                장소
-              </AppText>
-              <RegionSelector
-                onSelect={(areaCode) => {
-                  setSelectedAreaCode(areaCode);
-                  setQuery("");
-                  discardTransientGps(selectedPhoto?.id);
-                }}
-                selectedAreaCode={selectedAreaCode}
-              />
-              <AppText
-                style={styles.browseHint}
-                tone="tertiary"
-                variant="caption02"
-              >
-                지역을 고르면 관광지를 둘러보고, 장소명을 입력하면 전국에서
-                검색해요.
-              </AppText>
-              <View style={styles.searchField}>
-                <SearchIcon height={24} width={24} />
-                <TextInput
-                  accessibilityLabel="장소 검색"
-                  onChangeText={(value) => {
-                    setQuery(value);
-                    if (value.trim()) {
-                      setSelectedAreaCode(undefined);
-                    }
-                  }}
-                  placeholder="장소명으로 전국 검색"
-                  placeholderTextColor={semanticColors.text.disabled}
-                  style={styles.searchInput}
-                  value={query}
-                />
+            <View style={styles.form}>
+              <View style={styles.field}>
+                <AppText
+                  style={styles.fieldLabel}
+                  tone="tertiary"
+                  variant="subtitle03"
+                >
+                  방문 일자
+                </AppText>
+                <Pressable
+                  accessibilityLabel="방문 일자 변경"
+                  accessibilityRole="button"
+                  onPress={() => setDateSheetVisible(true)}
+                  style={({ pressed }) => [
+                    styles.datePill,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <AppText variant="button04">
+                    {formatDisplayDate(photoDate)}
+                  </AppText>
+                </Pressable>
               </View>
 
-              <View style={styles.placeResults}>
-                {isFetching ? (
-                  <View style={styles.statusCard}>
-                    <ActivityIndicator
-                      color={semanticColors.brand.primary}
-                      size="small"
-                    />
-                    <AppText tone="tertiary" variant="body02">
-                      관광지 후보를 찾고 있어요.
-                    </AppText>
-                  </View>
-                ) : null}
+              <View style={styles.field}>
+                <AppText
+                  style={styles.fieldLabel}
+                  tone="tertiary"
+                  variant="subtitle03"
+                >
+                  장소
+                </AppText>
+                <RegionSelector
+                  onSelect={(areaCode) => {
+                    setSelectedAreaCode(areaCode);
+                    setQuery("");
+                    discardTransientGps(selectedPhoto?.id);
+                  }}
+                  selectedAreaCode={selectedAreaCode}
+                />
+                <AppText
+                  style={styles.browseHint}
+                  tone="tertiary"
+                  variant="caption02"
+                >
+                  지역을 고르면 관광지를 둘러보고, 장소명을 입력하면 전국에서
+                  검색해요.
+                </AppText>
+                <View style={styles.searchField}>
+                  <SearchIcon height={24} width={24} />
+                  <TextInput
+                    accessibilityLabel="장소 검색"
+                    onChangeText={(value) => {
+                      setQuery(value);
+                      if (value.trim()) {
+                        setSelectedAreaCode(undefined);
+                      }
+                    }}
+                    placeholder="장소명으로 전국 검색"
+                    placeholderTextColor={semanticColors.text.disabled}
+                    style={styles.searchInput}
+                    value={query}
+                  />
+                </View>
 
-                {activeError ? (
-                  <Pressable
-                    accessibilityRole={canRetry ? "button" : undefined}
-                    disabled={!canRetry}
-                    onPress={() =>
-                      void (isRegionBrowse
-                        ? areaQuery.refetch()
-                        : searchQuery.refetch())
-                    }
-                    style={({ pressed }) => [
-                      styles.statusCard,
-                      pressed && canRetry && styles.pressed,
-                    ]}
-                  >
-                    <AppText tone="secondary" variant="body02">
-                      {activeError.message}
-                    </AppText>
-                    {canRetry ? (
-                      <AppText style={styles.retryText} variant="button06">
-                        다시 시도
+                <View style={styles.placeResults}>
+                  {isFetching ? (
+                    <View style={styles.statusCard}>
+                      <ActivityIndicator
+                        color={semanticColors.brand.primary}
+                        size="small"
+                      />
+                      <AppText tone="tertiary" variant="body02">
+                        관광지 후보를 찾고 있어요.
                       </AppText>
-                    ) : (
-                      <AppText tone="tertiary" variant="caption01">
-                        좌표는 폐기했어요. 장소명을 직접 검색해 주세요.
-                      </AppText>
-                    )}
-                  </Pressable>
-                ) : null}
+                    </View>
+                  ) : null}
 
-                {displayedPlaces.map((place) => {
-                  const isSelected = place.contentId === photoPlace?.contentId;
-
-                  return (
+                  {activeError ? (
                     <Pressable
-                      accessibilityLabel={`${place.name}, ${candidateRegionName(place)}, 관광 유형 ${candidateTypeCode(place)} 선택`}
-                      accessibilityRole="button"
-                      key={`${place.matchMethod}:${place.contentId}`}
-                      onPress={() => {
-                        setPhotoPlace(place);
-                        discardTransientGps(selectedPhoto?.id);
-                      }}
+                      accessibilityRole={canRetry ? "button" : undefined}
+                      disabled={!canRetry}
+                      onPress={() =>
+                        void (isRegionBrowse
+                          ? areaQuery.refetch()
+                          : searchQuery.refetch())
+                      }
                       style={({ pressed }) => [
-                        styles.placeCard,
-                        isSelected && styles.selectedPlaceCard,
-                        pressed && styles.pressed,
+                        styles.statusCard,
+                        pressed && canRetry && styles.pressed,
                       ]}
                     >
-                      <CandidateImage place={place} />
-                      <View style={styles.placeCardBody}>
-                        <AppText variant="subtitle02">{place.name}</AppText>
-                        <AppText tone="secondary" variant="subtitle04">
-                          {candidateDescription(place)}
+                      <AppText tone="secondary" variant="body02">
+                        {activeError.message}
+                      </AppText>
+                      {canRetry ? (
+                        <AppText style={styles.retryText} variant="button06">
+                          다시 시도
                         </AppText>
-                        <View style={styles.placeMetadata}>
-                          <View style={styles.placeMetadataTag}>
-                            <AppText tone="tertiary" variant="caption02">
-                              {candidateRegionName(place)}
-                            </AppText>
-                          </View>
-                          <View style={styles.placeMetadataTag}>
-                            <AppText tone="tertiary" variant="caption02">
-                              관광 유형 {candidateTypeCode(place)}
-                            </AppText>
+                      ) : (
+                        <AppText tone="tertiary" variant="caption01">
+                          좌표는 폐기했어요. 장소명을 직접 검색해 주세요.
+                        </AppText>
+                      )}
+                    </Pressable>
+                  ) : null}
+
+                  {displayedPlaces.map((place) => {
+                    const isSelected =
+                      place.contentId === photoPlace?.contentId;
+
+                    return (
+                      <Pressable
+                        accessibilityLabel={`${place.name}, ${candidateRegionName(place)}, 관광 유형 ${candidateTypeCode(place)} 선택`}
+                        accessibilityRole="button"
+                        key={`${place.matchMethod}:${place.contentId}`}
+                        onPress={() => {
+                          setPhotoPlace(place);
+                          discardTransientGps(selectedPhoto?.id);
+                        }}
+                        style={({ pressed }) => [
+                          styles.placeCard,
+                          isSelected && styles.selectedPlaceCard,
+                          pressed && styles.pressed,
+                        ]}
+                      >
+                        <CandidateImage place={place} />
+                        <View style={styles.placeCardBody}>
+                          <AppText variant="subtitle02">{place.name}</AppText>
+                          <AppText tone="secondary" variant="subtitle04">
+                            {candidateDescription(place)}
+                          </AppText>
+                          <View style={styles.placeMetadata}>
+                            <View style={styles.placeMetadataTag}>
+                              <AppText tone="tertiary" variant="caption02">
+                                {candidateRegionName(place)}
+                              </AppText>
+                            </View>
+                            <View style={styles.placeMetadataTag}>
+                              <AppText tone="tertiary" variant="caption02">
+                                관광 유형 {candidateTypeCode(place)}
+                              </AppText>
+                            </View>
                           </View>
                         </View>
-                      </View>
-                    </Pressable>
-                  );
-                })}
-                {!isFetching && !activeError && displayedPlaces.length === 0 ? (
-                  <View style={styles.noResultCard}>
-                    <AppText tone="tertiary" variant="body02">
-                      {query.trim().length === 1
-                        ? "검색어를 두 글자 이상 입력해 주세요."
-                        : isRegionBrowse
-                          ? `${selectedRegionName}에서 표시할 관광지를 찾지 못했어요.`
-                          : locationSearchDecision === "nearby" && !query.trim()
-                            ? "주변 후보가 없어요. 장소명을 직접 검색해 주세요."
-                            : "지역을 고르거나 장소명을 두 글자 이상 검색해 주세요."}
-                    </AppText>
-                  </View>
-                ) : null}
+                      </Pressable>
+                    );
+                  })}
+                  {!isFetching &&
+                  !activeError &&
+                  displayedPlaces.length === 0 ? (
+                    <View style={styles.noResultCard}>
+                      <AppText tone="tertiary" variant="body02">
+                        {query.trim().length === 1
+                          ? "검색어를 두 글자 이상 입력해 주세요."
+                          : isRegionBrowse
+                            ? `${selectedRegionName}에서 표시할 관광지를 찾지 못했어요.`
+                            : locationSearchDecision === "nearby" &&
+                                !query.trim()
+                              ? "주변 후보가 없어요. 장소명을 직접 검색해 주세요."
+                              : "지역을 고르거나 장소명을 두 글자 이상 검색해 주세요."}
+                      </AppText>
+                    </View>
+                  ) : null}
+                </View>
               </View>
             </View>
-          </View>
-        </ScrollView>
+          </ScrollView>
 
-        <PrimaryButton
-          label="정보 수정 완료"
-          onPress={completeEditing}
-          style={styles.bottomButton}
-        />
+          <View style={styles.footer}>
+            <PrimaryButton label="정보 수정 완료" onPress={completeEditing} />
+          </View>
+        </KeyboardAvoidingView>
       </View>
 
       <VisitDateSheet
@@ -572,13 +586,6 @@ export function PhotoInfoPage() {
 }
 
 const styles = StyleSheet.create({
-  bottomButton: {
-    bottom: 0,
-    left: spacing.md,
-    position: "absolute",
-    right: spacing.md,
-    width: "auto",
-  },
   browseHint: {
     paddingHorizontal: spacing.sm,
   },
@@ -617,6 +624,12 @@ const styles = StyleSheet.create({
     gap: spacing.xxl,
     marginTop: spacing.lg,
   },
+  footer: {
+    paddingTop: spacing.xxs,
+  },
+  keyboardView: {
+    flex: 1,
+  },
   noResultCard: {
     alignItems: "center",
     backgroundColor: semanticColors.background.surface,
@@ -625,6 +638,7 @@ const styles = StyleSheet.create({
   },
   photo: {
     borderRadius: radii.medium,
+    flexShrink: 0,
     height: 80,
     width: 80,
   },
@@ -633,6 +647,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: spacing.md,
     marginTop: spacing.lg,
+  },
+  photoIntroText: {
+    flex: 1,
+    minWidth: 0,
   },
   photoPlaceholder: {
     backgroundColor: semanticColors.border.disabled,
@@ -671,7 +689,10 @@ const styles = StyleSheet.create({
     opacity: 0.72,
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: spacing.lg,
+  },
+  scrollView: {
+    flex: 1,
   },
   searchField: {
     alignItems: "center",

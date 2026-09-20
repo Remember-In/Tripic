@@ -15,8 +15,6 @@ import type {
   DraftPhoto,
   DraftVisit,
   LocationSearchDecision,
-  RecordTripTheme,
-  RecordVoiceTheme,
 } from "./types";
 
 type CreateRecordSessionValue = {
@@ -38,11 +36,7 @@ type CreateRecordSessionValue = {
   selectedPhoto?: DraftPhoto;
   setPhotoDate: (date: string) => void;
   setPhotoPlace: (place: TouristPlaceCandidate) => void;
-  setTripTheme: (theme: RecordTripTheme) => void;
-  setVoiceTheme: (theme: RecordVoiceTheme) => void;
-  tripTheme: RecordTripTheme;
   visits: DraftVisit[];
-  voiceTheme: RecordVoiceTheme;
 };
 
 type PhotoDetails = {
@@ -78,8 +72,6 @@ export function CreateRecordSessionProvider({ children }: PropsWithChildren) {
     useState<LocationSearchDecision>("undecided");
   const [isDraftCommitted, setIsDraftCommitted] = useState(false);
   const [selectedPhotoId, setSelectedPhotoId] = useState<string | null>(null);
-  const [voiceTheme, setVoiceTheme] = useState<RecordVoiceTheme>("emotional");
-  const [tripTheme, setTripTheme] = useState<RecordTripTheme>("nature");
 
   const addPhotosFromLibrary = useCallback(
     (assets: ImagePickerAsset[]) => {
@@ -236,8 +228,6 @@ export function CreateRecordSessionProvider({ children }: PropsWithChildren) {
     setPhotoDetails({});
     setSelectedPhotoId(null);
     setLocationSearchDecision("undecided");
-    setVoiceTheme("emotional");
-    setTripTheme("nature");
     setIsDraftCommitted(false);
   }, []);
 
@@ -246,8 +236,6 @@ export function CreateRecordSessionProvider({ children }: PropsWithChildren) {
     setPhotoDetails({});
     setSelectedPhotoId(null);
     setLocationSearchDecision("undecided");
-    setVoiceTheme("emotional");
-    setTripTheme("nature");
     setIsDraftCommitted(true);
   }, []);
 
@@ -269,11 +257,7 @@ export function CreateRecordSessionProvider({ children }: PropsWithChildren) {
       selectedPhoto,
       setPhotoDate,
       setPhotoPlace,
-      setTripTheme,
-      setVoiceTheme,
-      tripTheme,
       visits,
-      voiceTheme,
     }),
     [
       addPhotosFromLibrary,
@@ -292,9 +276,7 @@ export function CreateRecordSessionProvider({ children }: PropsWithChildren) {
       selectedPhoto,
       setPhotoDate,
       setPhotoPlace,
-      tripTheme,
       visits,
-      voiceTheme,
     ],
   );
 

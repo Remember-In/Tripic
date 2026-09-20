@@ -7,16 +7,19 @@ describe("normalizeAppConfig", () => {
     expect(DEFAULT_APP_CONFIG.features.photoUpload).toBe(false);
     expect(normalizeAppConfig({}).features).toEqual({
       aiDiary: false,
+      appleLogin: false,
       photoUpload: false,
     });
     expect(
       normalizeAppConfig({ features: { aiDiary: 1, photoUpload: "true" } })
         .features,
-    ).toEqual({ aiDiary: false, photoUpload: false });
+    ).toEqual({ aiDiary: false, appleLogin: false, photoUpload: false });
     expect(
-      normalizeAppConfig({ features: { aiDiary: true, photoUpload: true } })
+      normalizeAppConfig({
+        features: { aiDiary: true, appleLogin: true, photoUpload: true },
+      })
         .features,
-    ).toEqual({ aiDiary: true, photoUpload: true });
+    ).toEqual({ aiDiary: true, appleLogin: true, photoUpload: true });
   });
 
   it("normalizes KTO limits and never lets the initial radius exceed the maximum", () => {

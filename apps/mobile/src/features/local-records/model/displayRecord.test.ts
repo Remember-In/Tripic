@@ -1,8 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import type { LocalTravelRecord } from "@/entities/travel-record";
+import type {
+  LocalTravelRecord,
+  LocalTravelRecordSummary,
+} from "@/entities/travel-record";
 
-import { mapLocalRecordToDisplay } from "./displayRecord";
+import {
+  mapLocalRecordSummaryToDisplay,
+  mapLocalRecordToDisplay,
+} from "./displayRecord";
 
 const record: LocalTravelRecord = {
   createdAt: "2026-08-11T09:00:00.000Z",
@@ -46,6 +52,30 @@ const record: LocalTravelRecord = {
 };
 
 describe("local record display mapping", () => {
+  it("uses the record's own first local photo for its summary card", () => {
+    const summary: LocalTravelRecordSummary = {
+      areaCodes: ["35"],
+      coverPhotoUri: "file:///tripic/record-1-photo-1.jpg",
+      createdAt: record.createdAt,
+      dayCount: 1,
+      endDate: "2026-08-11",
+      id: record.id,
+      ownerKey: record.ownerKey,
+      photoCount: 1,
+      startDate: "2026-08-11",
+      style: record.style,
+      tags: record.tags,
+      theme: record.theme,
+      title: record.title,
+      updatedAt: record.updatedAt,
+      visitCount: 1,
+    };
+
+    expect(mapLocalRecordSummaryToDisplay(summary).photo).toEqual({
+      uri: "file:///tripic/record-1-photo-1.jpg",
+    });
+  });
+
   it("combines live tourist metadata with local record and photo", () => {
     const display = mapLocalRecordToDisplay(record, {
       address: "경상북도 경주시",

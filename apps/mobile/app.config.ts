@@ -7,16 +7,17 @@ const baseConfig = appJson.expo as ExpoConfig;
 export default function defineExpoConfig({
   config,
 }: ConfigContext): ExpoConfig {
-  const nativeAppKey = process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY?.trim();
+  const nativeAppKey =
+    process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY?.trim();
   const plugins = [...(baseConfig.plugins ?? [])];
 
   if (nativeAppKey) {
     plugins.push([
       "@react-native-kakao/core",
       {
+        nativeAppKey,
         android: { authCodeHandlerActivity: true },
         ios: { handleKakaoOpenUrl: true },
-        nativeAppKey,
       },
     ]);
   }

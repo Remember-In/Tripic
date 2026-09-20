@@ -1,3 +1,5 @@
+export { clearGuestMode, readGuestMode, writeGuestMode } from "./authModeStorage";
+
 export {
   clearRefreshToken,
   readRefreshToken,
@@ -9,6 +11,7 @@ export {
   readLastLocalUserId,
   writeLastLocalUserId,
 } from "./localRecordOwnerStorage";
+
 export {
   createDurablePhotoCopy,
   deleteAllDurablePhotos,

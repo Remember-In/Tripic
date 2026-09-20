@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   authTokensSchema,
   authUserSchema,
+  type AuthProvider,
   type AuthTokens,
   type AuthUser,
 } from "@tripic/shared";
@@ -20,15 +21,22 @@ import { AppState } from "react-native";
 import { getMe, meQueryKey, type Me } from "@/entities/user";
 import { ApiError, configureApiAuth, requestJson } from "@/shared/api";
 import {
+  clearGuestMode,
   clearRefreshToken,
+  readGuestMode,
   readRefreshToken,
+  writeGuestMode,
   writeRefreshToken,
 } from "@/shared/lib/storage";
 
 const refreshReuseGraceMs = 1_000;
 
 export type AuthSessionStatus =
-  "authenticated" | "restoring" | "unauthenticated" | "unavailable";
+  | "authenticated"
+  | "guest"
+  | "restoring"
+  | "unauthenticated"
+  | "unavailable";
 
 export type SessionTokensAndUser = AuthTokens & {
   user: AuthUser;
@@ -36,9 +44,15 @@ export type SessionTokensAndUser = AuthTokens & {
 
 type AuthSessionContextValue = {
   clearLocalSession: () => Promise<void>;
-  establishSession: (session: SessionTokensAndUser) => Promise<void>;
+  continueAsGuest: () => Promise<void>;
+  establishSession: (
+    session: SessionTokensAndUser,
+    provider: AuthProvider,
+  ) => Promise<void>;
   isAuthenticated: boolean;
+  isGuest: boolean;
   logout: () => Promise<void>;
+  provider: AuthProvider | null;
   replaceUser: (user: AuthUser) => void;
   retrySessionRestore: () => Promise<void>;
   status: AuthSessionStatus;
@@ -51,6 +65,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState<AuthSessionStatus>("restoring");
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [provider, setProvider] = useState<AuthProvider | null>(null);
   const accessTokenRef = useRef<string | null>(null);
   const establishPromiseRef = useRef<Promise<void> | null>(null);
   const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
@@ -67,9 +82,10 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     accessTokenRef.current = null;
     recentRefreshRef.current = null;
     setUser(null);
+    setProvider(null);
     setStatus("unauthenticated");
     queryClient.clear();
-    await clearRefreshToken();
+    await Promise.all([clearRefreshToken(), clearGuestMode()]);
   }, [queryClient]);
 
   const performRefresh = useCallback(async () => {
@@ -181,7 +197,11 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
         }
 
         if (!accessToken) {
-          await clearSession();
+          accessTokenRef.current = null;
+          recentRefreshRef.current = null;
+          setUser(null);
+          setProvider(null);
+          setStatus((await readGuestMode()) ? "guest" : "unauthenticated");
           return;
         }
 
@@ -196,6 +216,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
 
         queryClient.setQueryData(meQueryKey, restoredUser);
         setUser(restoredUser);
+        setProvider(restoredUser.provider);
         setStatus("authenticated");
       } catch {
         if (
@@ -208,6 +229,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
         // 네트워크·서버의 일시 오류는 저장된 refresh token을 지우지 않는다.
         accessTokenRef.current = null;
         setUser(null);
+        setProvider(null);
         setStatus("unavailable");
       }
     })();
@@ -225,7 +247,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   }, [clearSession, queryClient, refreshAccessToken]);
 
   const establishSession = useCallback(
-    (session: SessionTokensAndUser) => {
+    (session: SessionTokensAndUser, nextProvider: AuthProvider) => {
       const tokens = authTokensSchema.parse(session);
       const nextUser = authUserSchema.parse(session.user);
       const previousEstablish = establishPromiseRef.current;
@@ -255,7 +277,10 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
         queryClient.clear();
 
         try {
-          await writeRefreshToken(tokens.refreshToken);
+          await Promise.all([
+            writeRefreshToken(tokens.refreshToken),
+            clearGuestMode(),
+          ]);
         } catch (error) {
           await clearSession();
           throw error;
@@ -263,6 +288,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
 
         accessTokenRef.current = tokens.accessToken;
         setUser(nextUser);
+        setProvider(nextProvider);
         setStatus("authenticated");
       })();
 
@@ -279,6 +305,17 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     },
     [clearSession, queryClient],
   );
+
+  const continueAsGuest = useCallback(async () => {
+    sessionRevisionRef.current += 1;
+    accessTokenRef.current = null;
+    recentRefreshRef.current = null;
+    queryClient.clear();
+    await Promise.all([clearRefreshToken(), writeGuestMode()]);
+    setUser(null);
+    setProvider(null);
+    setStatus("guest");
+  }, [queryClient]);
 
   const replaceUser = useCallback(
     (nextUser: AuthUser) => {
@@ -359,9 +396,12 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   const value = useMemo<AuthSessionContextValue>(
     () => ({
       clearLocalSession: clearSession,
+      continueAsGuest,
       establishSession,
       isAuthenticated: status === "authenticated",
+      isGuest: status === "guest",
       logout,
+      provider,
       replaceUser,
       retrySessionRestore,
       status,
@@ -369,8 +409,10 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     }),
     [
       clearSession,
+      continueAsGuest,
       establishSession,
       logout,
+      provider,
       replaceUser,
       retrySessionRestore,
       status,

@@ -3,7 +3,7 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 import type { SvgProps } from "react-native-svg";
 
 import { BackIcon } from "@/shared/assets/icons";
-import { spacing } from "@/shared/config/theme";
+import { spacing, type TypographyVariant } from "@/shared/config/theme";
 import { AppText } from "@/shared/ui/AppText";
 import { FloatingIconButton } from "@/shared/ui/FloatingIconButton";
 
@@ -14,6 +14,7 @@ export type PageHeaderProps = {
   onBackPress: () => void;
   style?: StyleProp<ViewStyle>;
   title: string;
+  titleVariant?: TypographyVariant;
 };
 
 export function PageHeader({
@@ -23,6 +24,7 @@ export function PageHeader({
   onBackPress,
   style,
   title,
+  titleVariant = "heading01",
 }: PageHeaderProps) {
   return (
     <View style={[styles.header, style]}>
@@ -32,7 +34,13 @@ export function PageHeader({
           icon={BackIcon}
           onPress={onBackPress}
         />
-        <AppText variant="heading01">{title}</AppText>
+        <AppText
+          lineBreakStrategyIOS="hangul-word"
+          style={styles.title}
+          variant={titleVariant}
+        >
+          {title}
+        </AppText>
       </View>
       {ActionIcon && onActionPress && actionAccessibilityLabel ? (
         <FloatingIconButton
@@ -49,12 +57,20 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     flexDirection: "row",
-    height: 52,
+    gap: spacing.sm,
     justifyContent: "space-between",
+    minHeight: 52,
+    paddingVertical: spacing.xxs,
   },
   leading: {
     alignItems: "center",
+    flex: 1,
     flexDirection: "row",
     gap: spacing.md,
+    minWidth: 0,
+  },
+  title: {
+    flex: 1,
+    minWidth: 0,
   },
 });

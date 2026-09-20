@@ -37,6 +37,7 @@ export function mapLocalRecordSummaryToDisplay(
         ? startDate
         : `${startDate}-${endDate.slice(5)}`,
     id: record.id,
+    photo: localPhotoSource(record.coverPhotoUri) ?? undefined,
     regions: regions.join(", ") || "지역 정보 없음",
     title: record.title,
   };

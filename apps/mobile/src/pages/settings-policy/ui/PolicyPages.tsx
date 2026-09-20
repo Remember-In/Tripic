@@ -1,5 +1,6 @@
 import {
   locationInformationDocument,
+  mapDataDocument,
   photoMetadataDocument,
   privacyPolicyDocument,
   termsOfServiceDocument,
@@ -20,4 +21,8 @@ export function LocationInformationPage() {
 
 export function PhotoMetadataPage() {
   return <SettingsPolicyPage document={photoMetadataDocument} />;
+}
+
+export function MapDataPage() {
+  return <SettingsPolicyPage document={mapDataDocument} />;
 }

@@ -1,14 +1,11 @@
 export const policyOperatorPlaceholders = {
-  address: "[주소 입력 필요]",
-  contactEmail: "[문의 이메일 입력 필요]",
-  contactPhone: "[연락처 입력 필요]",
-  effectiveDate: "[최초 출시일 입력 필요]",
-  locationManager: "[위치정보관리책임자 입력 필요]",
-  operatorName: "[운영자 정보 입력 필요]",
-  privacyOfficer: "[개인정보 보호책임자 입력 필요]",
-  representative: "[대표자 정보 입력 필요]",
-  serverBackupRetention: "[서버 백업 보관·파기 정책 확인 후 입력 필요]",
-  tourApiRetention: "[TourAPI 운영기관 확인 후 입력 필요]",
+  contactEmail: "tlguszz10@gmail.com",
+  effectiveDate: "2026-09-13",
+  locationManager: "Sihyun Park",
+  operatorName: "Sihyun Park",
+  privacyOfficer: "Sihyun Park",
+  tourApiRetention:
+    "Tripic은 영구 저장하지 않으며, TourAPI의 처리는 해당 기관 정책에 따름",
 } as const;
 
 export type PolicyField = {
@@ -25,10 +22,56 @@ export type PolicySection = {
 
 export type PolicyDocument = {
   badge?: string;
+  dateLabel?: string;
   description: string;
   effectiveDate: string;
   sections: readonly PolicySection[];
   title: string;
+};
+
+export const mapDataDocument: PolicyDocument = {
+  badge: "오프라인 내장 지도 · 17개 시·도 기준",
+  dateLabel: "경계 기준일",
+  description:
+    "Tripic 여행 지도는 방문 지역을 시각화하기 위해 통계청 SGIS 기반 행정경계 가공 데이터를 사용합니다.",
+  effectiveDate: "2026-07-01",
+  sections: [
+    {
+      fields: [
+        { label: "원 제공기관", value: "통계청 통계지리정보서비스(SGIS)" },
+        { label: "가공", value: "vuski/admdongkor" },
+        { label: "라이선스", value: "공공누리 제1유형 및 CC BY 4.0" },
+        {
+          label: "SGIS 출처",
+          value: "https://sgis.kostat.go.kr",
+        },
+        {
+          label: "가공 데이터",
+          value: "https://github.com/vuski/admdongkor",
+        },
+        {
+          label: "CC BY 4.0",
+          value: "https://creativecommons.org/licenses/by/4.0/",
+        },
+      ],
+      title: "데이터 출처와 이용조건",
+    },
+    {
+      paragraphs: [
+        "본 데이터는 통계청 통계지리정보서비스(SGIS)에서 공공누리 제1유형으로 개방한 행정동 경계를 가공한 것이며, vuski/admdongkor가 CC BY 4.0으로 배포한 자료를 사용합니다.",
+        "Tripic은 행정동 경계를 시군구 단위로 결합하고, 일반구가 있는 도시는 관광공사 지역 단위에 맞춰 상위 시로 결합했습니다. 이후 화면용 좌표로 투영·단순화하고 지역명과 확대 범위를 추가했으며, 작은 화면에서 선택하기 어려운 일부 원격 도서는 인셋으로 재배치했습니다. 화면의 17개 시·도는 유지하면서 하나의 법정동 시·도 코드를 공유하는 광주와 전남은 5자리 시군구 코드로 각각 구분합니다.",
+      ],
+      title: "가공 내용",
+    },
+    {
+      paragraphs: [
+        "지도 모양은 화면 표시와 터치 탐색에 사용합니다. 사진의 실제 방문 지역은 도형 연산으로 추측하지 않고, 사용자가 확정한 관광지의 TourAPI 지역 코드를 기준으로 표시합니다.",
+        "2026년 7월 경계를 사용하며, 인천의 제물포구·영종구·서해구·검단구를 포함한 현재 구·군을 표시합니다. 기존 인천 중구·동구·서구 기록처럼 새 경계로 하나의 구를 정확히 특정할 수 없는 과거 기록은 시·도 방문에는 반영하되 상세 구·군을 임의로 칠하지 않습니다.",
+      ],
+      title: "사용 범위",
+    },
+  ],
+  title: "지도 데이터 출처",
 };
 
 const operatorFields: readonly PolicyField[] = [
@@ -37,42 +80,31 @@ const operatorFields: readonly PolicyField[] = [
     value: policyOperatorPlaceholders.operatorName,
   },
   {
-    label: "대표자",
-    value: policyOperatorPlaceholders.representative,
-  },
-  {
-    label: "주소",
-    value: policyOperatorPlaceholders.address,
-  },
-  {
     label: "이메일",
     value: policyOperatorPlaceholders.contactEmail,
-  },
-  {
-    label: "전화번호",
-    value: policyOperatorPlaceholders.contactPhone,
   },
 ];
 
 export const privacyPolicyDocument: PolicyDocument = {
-  badge: "출시 전 운영자 정보와 보유기간 확정 필요",
+  badge: "Apple·Kakao 로그인 선택 · 게스트 이용 가능",
   description: `${policyOperatorPlaceholders.operatorName}(이하 “운영자”)는 Tripic 이용자의 개인정보를 중요하게 생각하며, 관련 법령에 따라 개인정보를 처리합니다.`,
   effectiveDate: policyOperatorPlaceholders.effectiveDate,
   sections: [
     {
       bullets: [
-        "카카오 로그인 과정에서 카카오 회원 식별값을 확인하며, 카카오 이메일·친구 목록은 요청하지 않습니다.",
-        "닉네임과 내부 사용자 식별값은 계정·프로필 제공을 위해 처리합니다.",
+        "로그인 없이 게스트로 이용하거나 Apple 또는 카카오 계정으로 로그인할 수 있습니다.",
+        "로그인 시 소셜 서비스의 회원 식별값, Tripic 내부 사용자 ID, 닉네임과 인증 토큰을 계정·세션 제공에 사용합니다. 이메일과 친구 목록은 요청하지 않습니다.",
         "사진 원본은 Tripic 운영 서버나 TourAPI로 전송하지 않습니다.",
         "사진 GPS 좌표는 Tripic 운영 서버와 로컬 데이터베이스에 저장하지 않습니다.",
         "위치 기반 검색을 선택하면 GPS 좌표와 검색 조건이 한국관광공사 TourAPI로 직접 전송됩니다.",
         "여행 기록과 EXIF가 제거된 사진 사본은 현재 기기의 앱 전용 저장공간에 저장됩니다.",
+        "여행 기록은 게스트 또는 로그인 계정별로 이 기기에만 분리 저장되며 운영 서버로 업로드하거나 다른 기기와 동기화하지 않습니다.",
       ],
       title: "1. 핵심 안내",
     },
     {
       bullets: [
-        "계정·인증: 카카오 회원 식별값, 내부 사용자 ID, 닉네임, 로그인 토큰 — 로그인과 세션 유지",
+        "계정·인증: Apple 또는 카카오 회원 식별값, 내부 사용자 ID, 닉네임, 로그인 토큰 — 로그인과 세션 유지",
         "선택한 사진: 이용자가 고른 사진과 로컬 참조값 — 사진 표시와 여행 기록 연결",
         "사진 메타데이터: 촬영일시, GPS 포함 여부, GPS 위도·경도 — 방문일 제안과 주변 관광지 검색",
         "여행 기록: 제목, 메모, 태그, 관광지 콘텐츠 ID, 방문일, 지역·관광유형 코드 — 기록 카드와 여행 지도 제공",
@@ -88,14 +120,7 @@ export const privacyPolicyDocument: PolicyDocument = {
         "GPS 위도·경도와 검색어는 검색 요청에 필요한 동안만 메모리에서 처리하고, Tripic 로컬 데이터베이스에는 저장하지 않습니다.",
         "기기의 여행 기록과 사진 사본은 이용자가 개별 기록 또는 전체 기록을 삭제하거나 앱을 삭제할 때까지 보관합니다.",
         "기기의 원본 사진은 이용자의 사진 보관함에 남으며 Tripic의 기록 삭제로 함께 삭제되지 않습니다.",
-        "회원 탈퇴 요청이 성공하면 운영 데이터베이스의 계정, 카카오 계정 연결, 갱신 토큰과 해당 계정에 연결된 서버 저장 데이터는 복구 유예 없이 즉시 물리 삭제됩니다.",
-        "회원 탈퇴 시 현재 계정의 기기 내 여행 기록과 사진 사본도 삭제하며, 즉시 삭제하지 못한 사진 파일은 정리 큐에 남겨 다음 앱 실행 때 다시 시도합니다.",
-      ],
-      fields: [
-        {
-          label: "서버 백업 사본의 보관·파기",
-          value: policyOperatorPlaceholders.serverBackupRetention,
-        },
+        "회원 탈퇴가 완료되면 운영 서버의 계정, 소셜 계정 연결과 인증 정보는 삭제되며 현재 계정의 기기 내 여행 기록과 사진 사본도 삭제합니다.",
       ],
       title: "3. 보유기간과 파기",
     },
@@ -123,6 +148,7 @@ export const privacyPolicyDocument: PolicyDocument = {
     {
       paragraphs: [
         "운영자는 이용자의 개인정보를 판매하지 않으며, 동의나 법령상 근거 없이 안내한 범위를 넘어 제3자에게 제공하지 않습니다.",
+        "소셜 로그인 인증에는 이용자가 선택한 Apple 또는 Kakao의 인증 서비스가 사용되며, 각 서비스의 개인정보 처리방침이 적용됩니다.",
         "현재 사진, GPS, EXIF 전체와 로컬 여행 기록 처리업무를 외부 업체에 위탁하거나 국외로 이전하지 않습니다. 호스팅·오류수집·분석·고객지원·동기화 서비스를 도입하면 수탁자와 처리 범위를 먼저 공개합니다.",
       ],
       title: "5. 제3자 제공·처리위탁·국외이전",
@@ -130,7 +156,7 @@ export const privacyPolicyDocument: PolicyDocument = {
     {
       bullets: [
         "앱에서 개별 여행 기록 또는 전체 로컬 기록을 삭제할 수 있습니다.",
-        "앱 설정에서 회원 탈퇴를 요청해 서버 계정과 현재 계정의 기기 내 기록을 삭제할 수 있습니다.",
+        "로그인 이용자는 앱 설정에서 회원 탈퇴를 요청해 서버 계정과 현재 계정의 기기 내 기록을 삭제할 수 있습니다.",
         "기기 설정에서 사진 접근 권한을 변경하거나 철회할 수 있습니다.",
         "사진 위치정보를 사용하지 않고 직접 관광지를 검색·선택할 수 있습니다.",
         "개인정보의 열람·정정·삭제·처리정지와 동의 철회는 아래 문의처로 요청할 수 있습니다.",
@@ -178,13 +204,14 @@ export const privacyPolicyDocument: PolicyDocument = {
 };
 
 export const termsOfServiceDocument: PolicyDocument = {
-  badge: "출시 전 운영자 정보와 시행일 확정 필요",
+  badge: "게스트·계정 선택 이용",
   description: `이 약관은 ${policyOperatorPlaceholders.operatorName}(이하 “운영자”)가 제공하는 Tripic 서비스의 이용 조건과 운영자·이용자의 권리 및 의무를 정합니다.`,
   effectiveDate: policyOperatorPlaceholders.effectiveDate,
   sections: [
     {
       bullets: [
         "“이용자”는 이 약관에 따라 Tripic을 이용하는 사람입니다.",
+        "“계정”은 이용자가 선택한 Apple 또는 카카오 인증을 통해 생성되는 Tripic 이용 단위입니다.",
         "“여행 기록”은 사진, 관광지 콘텐츠 ID, 방문일, 지역코드, 제목·메모 등을 연결해 저장한 기록입니다.",
         "“관광정보”는 한국관광공사 TourAPI 등 외부 서비스가 제공하는 관광지명, 주소, 소개, 이미지 등의 정보입니다.",
         "“사진 위치정보”는 이용자가 선택한 사진의 메타데이터에 포함된 촬영 위치의 위도·경도입니다.",
@@ -205,8 +232,8 @@ export const termsOfServiceDocument: PolicyDocument = {
         "사용자가 확정한 장소의 여행 기록 생성",
         "지역별 방문 현황과 여행 지도 표시",
         "여행 기록과 메모의 기기 내 저장·조회·수정·삭제",
-        "카카오 로그인, 계정·프로필과 서비스 운영 정보 제공",
-        "회원 탈퇴와 계정 데이터 삭제",
+        "Apple·카카오 로그인, 계정·프로필 관리와 회원 탈퇴",
+        "서비스 운영 정보 제공",
       ],
       title: "제3조 서비스의 내용",
     },
@@ -221,6 +248,8 @@ export const termsOfServiceDocument: PolicyDocument = {
     },
     {
       paragraphs: [
+        "회원가입이나 로그인 없이 게스트로 이용하거나 Apple 또는 카카오 계정으로 로그인할 수 있습니다.",
+        "게스트 기록과 로그인 계정의 기록은 현재 기기에서 서로 분리됩니다. 로그인한다고 게스트 기록이 자동으로 계정 영역에 합쳐지지 않습니다.",
         "여행 기록과 사진 사본은 현재 기기 앱 전용 저장공간에 저장됩니다. 앱 삭제, 기기 초기화·분실·교체, 운영체제 오류 또는 저장공간 손상으로 기록이 사라질 수 있으며 운영자가 이를 원격으로 복구하지 못할 수 있습니다.",
         "중요한 원본 사진은 이용자가 별도로 안전하게 백업해야 합니다.",
       ],
@@ -257,8 +286,8 @@ export const termsOfServiceDocument: PolicyDocument = {
     },
     {
       paragraphs: [
-        "이용자는 언제든지 여행 기록을 삭제하거나 앱 설정에서 회원 탈퇴를 요청해 서비스 이용을 종료할 수 있습니다.",
-        "회원 탈퇴가 완료되면 운영 데이터베이스의 계정, 카카오 계정 연결, 갱신 토큰과 해당 계정에 연결된 서버 저장 데이터는 즉시 물리 삭제되며 복구할 수 없습니다. 서버 백업 사본은 개인정보 처리방침에 공개할 별도 보관·파기 정책을 따릅니다. 현재 계정의 기기 내 여행 기록과 사진 사본도 삭제 대상으로 처리하고, 즉시 삭제하지 못한 사진 파일은 다음 앱 실행 때 다시 정리합니다.",
+        "이용자는 언제든지 개별·전체 여행 기록을 삭제하거나, 로그인 이용자는 앱 설정에서 회원 탈퇴를 요청하고 서비스 이용을 종료할 수 있습니다.",
+        "회원 탈퇴가 완료되면 운영 서버의 계정과 소셜 계정 연결·인증 정보, 현재 계정의 기기 내 여행 기록과 사진 사본을 삭제합니다. 게스트 기록과 사진 보관함의 원본 사진은 삭제되지 않습니다.",
       ],
       title: "제10조 이용 종료",
     },
@@ -329,7 +358,7 @@ export const locationInformationDocument: PolicyDocument = {
     {
       paragraphs: [
         "GPS 좌표는 후보 조회에 필요한 동안 앱 메모리에서만 일시 처리하고, Tripic 로컬 데이터베이스나 운영 서버에 저장하지 않습니다.",
-        `위치정보 이용·제공사실 확인자료의 기록 의무와 보유기간은 ${policyOperatorPlaceholders.tourApiRetention} 상태이며, 법률 검토 결과에 따라 확정해야 합니다.`,
+        "Tripic은 GPS 좌표나 TourAPI 검색 응답을 영구 저장하지 않습니다. 외부 서비스의 요청 정보 처리는 해당 기관의 정책에 따릅니다.",
       ],
       title: "3. 저장과 파기",
     },

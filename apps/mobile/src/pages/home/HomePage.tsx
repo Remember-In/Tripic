@@ -1,10 +1,19 @@
 import { useRouter, type Href } from "expo-router";
-import { useCallback, useMemo } from "react";
-import { Alert, Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import {
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from "react-native";
 
 import {
-  TOTAL_KTO_REGION_COUNT,
+  TOTAL_TRAVEL_CITY_COUNTY_COUNT,
   collectVisitedAreaCodes,
+  collectVisitedCityCountyKeys,
+  collectVisitedSigunguKeys,
 } from "@/entities/region";
 import { useCreateRecordSession } from "@/features/create-record-session";
 import {
@@ -23,7 +32,15 @@ import {
   PrimaryButton,
   Screen,
 } from "@/shared/ui";
-import { TravelMap } from "@/widgets/travel-map";
+import {
+  INITIAL_TRAVEL_MAP_HISTORY,
+  TravelMap,
+  currentMapDepth,
+  goBackMapHistory,
+  navigateMapHistory,
+  type TravelMapDepth,
+  type TravelMapHistory,
+} from "@/widgets/travel-map";
 
 type StatCardProps = {
   highlighted?: boolean;
@@ -62,9 +79,13 @@ export function HomePage() {
   const router = useRouter();
   const { resetDraft } = useCreateRecordSession();
   const areaProgress = useLocalRegionProgressQuery("area");
+  const sigunguProgress = useLocalRegionProgressQuery("sigungu");
   const recordsQuery = useLocalRecordsQuery();
   const stats = useLocalRecordStatsQuery();
   const ownerKey = useLocalRecordOwnerKey();
+  const [mapHistory, setMapHistory] = useState<TravelMapHistory>(
+    INITIAL_TRAVEL_MAP_HISTORY,
+  );
   const recentRecords = useMemo(
     () =>
       (recordsQuery.data ?? []).slice(0, 3).map(mapLocalRecordSummaryToDisplay),
@@ -77,6 +98,23 @@ export function HomePage() {
       ),
     [areaProgress.data],
   );
+  const visitedSigunguKeys = useMemo(
+    () => collectVisitedSigunguKeys(sigunguProgress.data ?? []),
+    [sigunguProgress.data],
+  );
+  const visitedCityCountyKeys = useMemo(
+    () => collectVisitedCityCountyKeys(sigunguProgress.data ?? []),
+    [sigunguProgress.data],
+  );
+  const mapDepth = currentMapDepth(mapHistory);
+
+  const navigateMap = useCallback((nextDepth: TravelMapDepth) => {
+    setMapHistory((history) => navigateMapHistory(history, nextDepth));
+  }, []);
+
+  const goBackMap = useCallback(() => {
+    setMapHistory((history) => goBackMapHistory(history));
+  }, []);
 
   const openRecords = useCallback(() => {
     router.push("/records" as Href);
@@ -100,7 +138,7 @@ export function HomePage() {
     if (!ownerKey) {
       Alert.alert(
         "기록을 열 수 없어요",
-        "로그인 상태를 확인한 뒤 다시 시도해 주세요.",
+        "기록 저장공간을 준비한 뒤 다시 시도해 주세요.",
       );
       return;
     }
@@ -116,7 +154,9 @@ export function HomePage() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.header}>
-          <AppText variant="heading01">여행 지도</AppText>
+          <AppText style={styles.headerTitle} variant="heading01">
+            여행 지도
+          </AppText>
           <View style={styles.headerActions}>
             <FloatingIconButton
               accessibilityLabel="여행 기록 보기"
@@ -131,14 +171,20 @@ export function HomePage() {
           </View>
         </View>
 
-        <TravelMap visitedAreaCodes={visitedAreaCodes} />
+        <TravelMap
+          depth={mapDepth}
+          onBack={goBackMap}
+          onDepthChange={navigateMap}
+          visitedAreaCodes={visitedAreaCodes}
+          visitedSigunguKeys={visitedSigunguKeys}
+        />
 
         <View style={styles.statsRow}>
           <StatCard
             highlighted
-            label="방문 시・도"
-            suffix={`/${TOTAL_KTO_REGION_COUNT}`}
-            value={visitedAreaCodes.size}
+            label="방문 시・군"
+            suffix={`/${TOTAL_TRAVEL_CITY_COUNTY_COUNT}`}
+            value={visitedCityCountyKeys.size}
           />
           <StatCard
             label="기록한 관광지"
@@ -209,6 +255,25 @@ export function HomePage() {
                     pressed && styles.pressed,
                   ]}
                 >
+                  {record.photo ? (
+                    <Image
+                      accessibilityLabel={`${record.title} 대표 사진`}
+                      resizeMode="cover"
+                      source={record.photo}
+                      style={styles.recentCardPhoto}
+                    />
+                  ) : (
+                    <View
+                      style={[
+                        styles.recentCardPhoto,
+                        styles.recentCardPhotoPlaceholder,
+                      ]}
+                    >
+                      <AppText tone="placeholder" variant="caption02">
+                        사진 없음
+                      </AppText>
+                    </View>
+                  )}
                   <View style={styles.recentCardText}>
                     <AppText
                       numberOfLines={1}
@@ -247,24 +312,30 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "center",
     flexDirection: "row",
-    height: 44,
+    gap: spacing.sm,
     justifyContent: "space-between",
     marginBottom: spacing.lg,
     marginTop: 3,
     maxWidth: 358,
+    minHeight: 44,
     paddingLeft: 11,
     width: "100%",
   },
+  headerTitle: {
+    flex: 1,
+    minWidth: 0,
+  },
   headerActions: {
+    flexShrink: 0,
     flexDirection: "row",
     gap: spacing.sm,
   },
   statsRow: {
     flexDirection: "row",
     gap: spacing.md,
-    height: 94,
     marginTop: spacing.lg,
     maxWidth: 358,
+    minHeight: 94,
     width: "100%",
   },
   statCard: {
@@ -273,13 +344,13 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: spacing.xxs,
     justifyContent: "center",
-    overflow: "hidden",
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
   statValueRow: {
     alignItems: "center",
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: spacing.xs,
   },
   highlightedStatValue: {
@@ -317,6 +388,17 @@ const styles = StyleSheet.create({
   recentCardText: {
     flex: 1,
     gap: spacing.xxs,
+  },
+  recentCardPhoto: {
+    borderRadius: radii.small,
+    height: 48,
+    overflow: "hidden",
+    width: 48,
+  },
+  recentCardPhotoPlaceholder: {
+    alignItems: "center",
+    backgroundColor: semanticColors.background.canvas,
+    justifyContent: "center",
   },
   recentState: {
     alignItems: "center",

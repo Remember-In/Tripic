@@ -8,6 +8,11 @@ import type {
   KtoRequestOptions,
 } from "./types";
 import { MAX_KTO_LIST_CANDIDATES, MAX_KTO_RADIUS_METERS } from "./types";
+import {
+  getLegalAreaCode,
+  getLegalDistrictCodes,
+  resolveKtoRegionCodes,
+} from "./regionCodeMap";
 
 const KTO_BASE_URL = "https://apis.data.go.kr/B551011/KorService2";
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -75,11 +80,20 @@ function parseListItem(value: unknown): KtoListItem | null {
     return null;
   }
 
+  const regionCodes = resolveKtoRegionCodes({
+    areaCode: optionalString(item.areacode),
+    legalAreaCode:
+      optionalString(item.lDongRegnCd) ?? optionalString(item.ldongregncd),
+    legalSigunguCode:
+      optionalString(item.lDongSignguCd) ?? optionalString(item.ldongsigngucd),
+    sigunguCode: optionalString(item.sigungucode),
+  });
+
   return {
     address: [asString(item.addr1), asString(item.addr2)]
       .filter(Boolean)
       .join(" "),
-    areaCode: asString(item.areacode),
+    areaCode: regionCodes.areaCode,
     categoryCode:
       optionalString(item.cat3) ??
       optionalString(item.cat2) ??
@@ -88,14 +102,65 @@ function parseListItem(value: unknown): KtoListItem | null {
     contentTypeId: optionalString(item.contenttypeid),
     distanceMeters: optionalNumber(item.dist),
     imageUrl: optionalString(item.firstimage),
-    sigunguCode: optionalString(item.sigungucode),
+    legalAreaCode: regionCodes.legalAreaCode,
+    legalSigunguCode: regionCodes.legalSigunguCode,
+    sigunguCode: regionCodes.sigunguCode,
     thumbnailUrl: optionalString(item.firstimage2),
     title,
   };
 }
 
+function areaSearchFilters(input: KtoAreaSearchInput) {
+  const areaCode = input.areaCode?.trim();
+  const sigunguCode = input.sigunguCode?.trim();
+  if (!areaCode) {
+    return [{}] as const;
+  }
+
+  const legalAreaCode = getLegalAreaCode(areaCode);
+  if (!legalAreaCode) {
+    return [{ areaCode, sigunguCode }];
+  }
+
+  if (!sigunguCode) {
+    return [{ lDongRegnCd: legalAreaCode }];
+  }
+
+  const legalDistrictCodes = getLegalDistrictCodes(areaCode, sigunguCode);
+  if (legalDistrictCodes.length === 0) {
+    return [{ areaCode, sigunguCode }];
+  }
+
+  return legalDistrictCodes.map((legalSigunguCode) => ({
+    lDongRegnCd: legalAreaCode,
+    lDongSignguCd: legalSigunguCode,
+  }));
+}
+
 function extractItems(payload: unknown): readonly unknown[] {
-  const response = asRecord(asRecord(payload).response);
+  const root = asRecord(payload);
+  const flatResultCode = asString(root.resultCode);
+  if (flatResultCode && flatResultCode !== "0000") {
+    throw new KtoApiError(
+      flatResultCode,
+      asString(root.resultMsg) || "TourAPI 요청에 실패했습니다.",
+    );
+  }
+
+  const serviceResponse = asRecord(root.OpenAPI_ServiceResponse);
+  const commonErrorHeader = asRecord(serviceResponse.cmmMsgHeader);
+  const gatewayResultCode = asString(commonErrorHeader.returnReasonCode);
+  const gatewayResultMessage =
+    asString(commonErrorHeader.returnAuthMsg) ||
+    asString(commonErrorHeader.errMsg);
+  if (gatewayResultCode || gatewayResultMessage) {
+    throw new KtoApiError(
+      gatewayResultCode || "OPEN_API_SERVICE_ERROR",
+      gatewayResultMessage || "TourAPI 요청에 실패했습니다.",
+    );
+  }
+
+  const response = asRecord(root.response);
   const header = asRecord(response.header);
   const resultCode = asString(header.resultCode);
   if (resultCode && resultCode !== "0000") {
@@ -165,6 +230,24 @@ async function requestKto(
       headers: { Accept: "application/json" },
       signal: controller.signal,
     });
+
+    let payload: unknown;
+    try {
+      payload = await response.json();
+    } catch {
+      if (!response.ok) {
+        throw new KtoApiError(
+          `HTTP_${response.status}`,
+          "관광정보 서버에 연결하지 못했습니다.",
+        );
+      }
+      throw new KtoApiError(
+        "INVALID_RESPONSE",
+        "관광정보 서버의 응답을 해석하지 못했습니다.",
+      );
+    }
+
+    const items = extractItems(payload);
     if (!response.ok) {
       throw new KtoApiError(
         `HTTP_${response.status}`,
@@ -172,7 +255,7 @@ async function requestKto(
       );
     }
 
-    return extractItems(await response.json());
+    return items;
   } catch (error) {
     if (error instanceof KtoApiError) {
       throw error;
@@ -260,21 +343,47 @@ export async function fetchKtoPlacesByArea(
   options?: KtoListRequestOptions,
 ) {
   const maxCandidates = candidateLimit(options?.maxCandidates);
-  const items = await requestKto(
-    "areaBasedList2",
-    {
-      areaCode: input.areaCode?.trim(),
-      arrange: "A",
-      numOfRows: maxCandidates,
-      pageNo: 1,
-      sigunguCode: input.sigunguCode?.trim(),
-    },
-    options,
+  const requestedAreaCode = input.areaCode?.trim();
+  const requestedSigunguCode = input.sigunguCode?.trim();
+  const isSharedLegalAreaBrowse =
+    !requestedSigunguCode &&
+    (requestedAreaCode === "5" || requestedAreaCode === "38");
+  const requestRows = isSharedLegalAreaBrowse
+    ? MAX_KTO_LIST_CANDIDATES
+    : maxCandidates;
+  const itemGroups = await Promise.all(
+    areaSearchFilters(input).map((regionFilter) =>
+      requestKto(
+        "areaBasedList2",
+        {
+          ...regionFilter,
+          arrange: "A",
+          numOfRows: requestRows,
+          pageNo: 1,
+        },
+        options,
+      ),
+    ),
   );
 
-  return items
+  const seenContentIds = new Set<string>();
+  return itemGroups
+    .flat()
     .map(parseListItem)
     .filter((item): item is KtoListItem => Boolean(item))
+    .filter((item) => !requestedAreaCode || item.areaCode === requestedAreaCode)
+    .filter(
+      (item) =>
+        !requestedSigunguCode || item.sigunguCode === requestedSigunguCode,
+    )
+    .filter((item) => {
+      if (seenContentIds.has(item.contentId)) {
+        return false;
+      }
+      seenContentIds.add(item.contentId);
+      return true;
+    })
+    .sort((left, right) => left.title.localeCompare(right.title, "ko"))
     .slice(0, maxCandidates);
 }
 
@@ -282,20 +391,7 @@ export async function fetchKtoPlaceDetail(
   contentId: string,
   options?: KtoRequestOptions,
 ): Promise<KtoPlaceDetail | null> {
-  const [rawItem] = await requestKto(
-    "detailCommon2",
-    {
-      addrinfoYN: "Y",
-      areacodeYN: "Y",
-      catcodeYN: "Y",
-      contentId,
-      defaultYN: "Y",
-      firstImageYN: "Y",
-      mapinfoYN: "N",
-      overviewYN: "Y",
-    },
-    options,
-  );
+  const [rawItem] = await requestKto("detailCommon2", { contentId }, options);
   const base = parseListItem(rawItem);
   if (!base) {
     return null;
@@ -320,7 +416,6 @@ export async function fetchKtoPlaceImages(
       imageYN: "Y",
       numOfRows: 10,
       pageNo: 1,
-      subImageYN: "Y",
     },
     options,
   );

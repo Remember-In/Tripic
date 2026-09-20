@@ -94,6 +94,7 @@ export type LocalTravelRecord = {
 
 export type LocalTravelRecordSummary = {
   areaCodes: readonly string[];
+  coverPhotoUri: string | null;
   createdAt: string;
   dayCount: number;
   endDate: string | null;

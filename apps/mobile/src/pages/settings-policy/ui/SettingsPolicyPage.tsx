@@ -49,7 +49,7 @@ export function SettingsPolicyPage({ document }: SettingsPolicyPageProps) {
             </AppText>
             <View style={styles.effectiveDate}>
               <AppText tone="tertiary" variant="caption02">
-                시행일
+                {document.dateLabel ?? "시행일"}
               </AppText>
               <AppText selectable variant="caption02">
                 {document.effectiveDate}

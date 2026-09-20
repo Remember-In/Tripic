@@ -11,6 +11,7 @@ export type KtoAppConfig = Readonly<{
 
 export type AppFeatures = Readonly<{
   aiDiary: boolean;
+  appleLogin: boolean;
   photoUpload: boolean;
 }>;
 
@@ -22,6 +23,7 @@ export type AppConfig = Readonly<{
 export const DEFAULT_APP_CONFIG: AppConfig = {
   features: {
     aiDiary: false,
+    appleLogin: false,
     photoUpload: false,
   },
   kto: {
@@ -74,6 +76,7 @@ export function normalizeAppConfig(value: unknown): AppConfig {
     features: {
       // 미완성 기능은 서버가 명시적으로 true를 보낼 때만 활성화한다.
       aiDiary: features?.aiDiary === true,
+      appleLogin: features?.appleLogin === true,
       photoUpload: features?.photoUpload === true,
     },
     kto: {

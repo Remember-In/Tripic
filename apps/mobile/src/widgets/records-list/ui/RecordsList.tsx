@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, View } from "react-native";
+import { Image, Pressable, StyleSheet, View } from "react-native";
 
 import {
   type RecordFilter,
@@ -64,6 +64,20 @@ export function RecordsList({
             onPress={() => onOpenRecord(record.id)}
             style={({ pressed }) => [styles.card, pressed && styles.pressed]}
           >
+            {record.photo ? (
+              <Image
+                accessibilityLabel={`${record.title} 대표 사진`}
+                resizeMode="cover"
+                source={record.photo}
+                style={styles.cardPhoto}
+              />
+            ) : (
+              <View style={[styles.cardPhoto, styles.cardPhotoPlaceholder]}>
+                <AppText tone="placeholder" variant="caption02">
+                  사진 없음
+                </AppText>
+              </View>
+            )}
             <View style={styles.cardText}>
               <AppText tone="secondary" variant="subtitle03">
                 {record.title}
@@ -119,6 +133,17 @@ const styles = StyleSheet.create({
   cardText: {
     flex: 1,
     gap: spacing.xs,
+  },
+  cardPhoto: {
+    borderRadius: radii.small,
+    height: 52,
+    overflow: "hidden",
+    width: 52,
+  },
+  cardPhotoPlaceholder: {
+    alignItems: "center",
+    backgroundColor: palette.gray[50],
+    justifyContent: "center",
   },
   pressed: {
     opacity: 0.72,

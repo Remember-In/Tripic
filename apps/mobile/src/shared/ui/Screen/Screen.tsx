@@ -6,15 +6,22 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { semanticColors } from "@/shared/config/theme";
 
 export type ScreenProps = PropsWithChildren<{
+  statusBarBackgroundColor?: string;
+  statusBarStyle?: "auto" | "inverted" | "light" | "dark";
   style?: StyleProp<ViewStyle>;
 }>;
 
-export function Screen({ children, style }: ScreenProps) {
+export function Screen({
+  children,
+  statusBarBackgroundColor = semanticColors.background.canvas,
+  statusBarStyle = "dark",
+  style,
+}: ScreenProps) {
   return (
     <SafeAreaView edges={["top", "bottom"]} style={[styles.screen, style]}>
       <StatusBar
-        backgroundColor={semanticColors.background.canvas}
-        style="dark"
+        backgroundColor={statusBarBackgroundColor}
+        style={statusBarStyle}
       />
       <View style={styles.content}>{children}</View>
     </SafeAreaView>

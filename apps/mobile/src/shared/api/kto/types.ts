@@ -6,6 +6,8 @@ export type KtoListItem = {
   contentTypeId?: string;
   distanceMeters?: number;
   imageUrl?: string;
+  legalAreaCode?: string;
+  legalSigunguCode?: string;
   sigunguCode?: string;
   thumbnailUrl?: string;
   title: string;
