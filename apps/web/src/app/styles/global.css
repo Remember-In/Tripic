@@ -28,6 +28,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 button,
 input,
@@ -45,6 +46,7 @@ a {
 button {
   border: 0;
   cursor: pointer;
+  touch-action: manipulation;
 }
 button:disabled {
   cursor: not-allowed;
@@ -53,6 +55,7 @@ button:disabled {
 
 .app-frame {
   min-height: 100vh;
+  min-height: 100dvh;
 }
 .app-header {
   position: sticky;
@@ -68,6 +71,9 @@ button:disabled {
   backdrop-filter: blur(18px);
 }
 .wordmark {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
   font-size: 27px;
   font-weight: 900;
   letter-spacing: -1.5px;
@@ -77,6 +83,10 @@ button:disabled {
   gap: 8px;
 }
 .app-header nav a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
   padding: 10px 14px;
   border-radius: 999px;
   color: #717171;
@@ -122,8 +132,10 @@ button:disabled {
 .centered-state {
   display: grid;
   min-height: 100vh;
+  min-height: 100dvh;
   place-items: center;
-  padding: 24px;
+  padding: max(24px, env(safe-area-inset-top)) 24px
+    max(24px, env(safe-area-inset-bottom));
 }
 .login-page {
   background: radial-gradient(circle at 50% 15%, #e9f7cf 0, #f4f4f2 43%);
@@ -566,6 +578,11 @@ button:disabled {
   display: flex;
   gap: 18px;
 }
+.policy-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
 .policy-card {
   padding: clamp(28px, 6vw, 56px);
   background: var(--surface);
@@ -780,7 +797,7 @@ button:disabled {
   .app-header {
     align-items: flex-start;
     flex-direction: column;
-    padding: 14px 16px 10px;
+    padding: max(10px, env(safe-area-inset-top)) 16px 10px;
   }
   .app-header nav {
     width: 100%;
@@ -788,11 +805,12 @@ button:disabled {
   }
   .app-header nav a {
     flex: 1;
+    min-height: 44px;
     text-align: center;
   }
   .page {
     width: min(100% - 28px, 520px);
-    padding: 34px 0 80px;
+    padding: 34px 0 max(80px, calc(env(safe-area-inset-bottom) + 32px));
   }
   .page-heading {
     align-items: flex-start;
