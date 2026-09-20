@@ -87,10 +87,18 @@ URL은 **일차(day) 기준**으로 통일한다 — 일기(entry)와 사진(pho
   "entryCount": 0,
   "startDate": null, // 일기·사진이 있는 날짜의 min (YYYY-MM-DD) — 목록 카드의 "2026.07.22-23" 표시용
   "endDate": null,   // max — 둘 다 없으면 null
+  "coverPhoto": null, // 목록 카드 썸네일 — 사진이 없으면 null
   "createdAt": "2026-08-21T12:00:00.000Z",
   "updatedAt": "2026-08-21T12:00:00.000Z"
 }
 ```
+
+`coverPhoto`는 **가장 이른 일차의 가장 먼저 올린 사진**이다 (`{ id, url }`). `RecordPhoto.id`가
+`uuid(7)`(시간 정렬)이라 `(date, id)` 오름차순의 첫 행이 곧 그 의미이고, 상세 응답의 사진 순서와
+같은 규칙을 쓴다. 추가 쿼리 없이 기존 `include` 에 사진 id 를 얹어 계산하며 **바이트(bytea)는 읽지 않는다.**
+
+> 웹 주의: `coverPhoto.url` 은 인증이 필요한 경로라 `<img src>` 로 바로 부를 수 없다.
+> `fetch` + Bearer → `blob:` object URL 로 받아야 한다 ([15](./15-web-client-server-design.md) §7).
 
 ### GET /records — 내 기록 목록
 

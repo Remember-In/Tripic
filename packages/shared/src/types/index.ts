@@ -138,6 +138,11 @@ export interface RecordSummary {
   startDate: string | null;
   /** 최대 날짜 `YYYY-MM-DD`. 없으면 null */
   endDate: string | null;
+  /**
+   * 목록에서 바로 보여줄 대표 사진 — 가장 이른 일차의 첫 사진. 사진이 없으면 null.
+   * 서버는 항상 이 키를 채운다(생략하지 않는다).
+   */
+  coverPhoto: RecordPhoto | null;
   /** ISO 8601 */
   createdAt: string;
   /** ISO 8601 */
@@ -165,7 +170,11 @@ export interface RecordDay {
 
 export interface RecordPhoto {
   id: string;
-  /** 바이너리 서빙 경로 */
+  /**
+   * 바이너리 서빙 경로. **Authorization 헤더가 필요하다** —
+   * 브라우저는 이미지 요청에 헤더를 붙이지 않으므로 웹에서는 `<img src>` 로 바로 못 쓴다
+   * (fetch + Bearer → blob: object URL).
+   */
   url: string;
 }
 
