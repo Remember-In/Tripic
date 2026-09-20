@@ -11,7 +11,7 @@ import type {
   StoredEntry,
   StoredPhoto,
 } from "@/records/ports/records-repository.port";
-import type { Record as RecordRow } from "@/generated/prisma/client";
+import type { Prisma, Record as RecordRow } from "@/generated/prisma/client";
 
 /** `YYYY-MM-DD` ↔ Postgres date(UTC 자정) 변환 */
 const toDate = (day: string): Date => new Date(`${day}T00:00:00.000Z`);
@@ -21,11 +21,30 @@ interface DayRow {
   date: Date;
 }
 
-/** 요약 계산에 필요한 날짜만 읽는다 — 사진 바이트(bytea)는 절대 싣지 않는다 */
+/** 대표 사진 선정에 필요한 만큼만 — 바이트(bytea)가 섞이면 타입에서 걸린다 */
+interface PhotoRow {
+  id: string;
+  date: Date;
+}
+
+/** 사진 바이너리 서빙 경로 — 상세와 요약이 같은 규칙을 쓰도록 한 곳에 둔다 */
+const photoUrl = (recordId: string, day: string, photoId: string) =>
+  `/records/${recordId}/days/${day}/photos/${photoId}`;
+
+/**
+ * 요약 계산에 필요한 날짜와 대표 사진 id 만 읽는다 — 사진 바이트(bytea)는 절대 싣지 않는다.
+ * 사진 id 는 uuid(7) 이라 시간 순이므로, (date, id) 오름차순의 첫 행이 곧
+ * "가장 이른 일차의 가장 먼저 올린 사진" 이다.
+ */
 const dayColumns = {
   entries: { select: { date: true } },
-  photos: { select: { date: true } },
-};
+  photos: {
+    select: { id: true, date: true },
+    orderBy: [{ date: "asc" }, { id: "asc" }],
+  },
+  // satisfies 는 단언이 아니라 검사다 — include 계약 위반을 잡으면서
+  // "asc" 같은 리터럴 타입을 남겨 row.entries/row.photos 추론을 유지한다.
+} satisfies Prisma.RecordInclude;
 
 @Injectable()
 export class PrismaRecordsAdapter implements RecordsRepository {
@@ -99,7 +118,7 @@ export class PrismaRecordsAdapter implements RecordsRepository {
       const day = dayOf(photo.date);
       day.photos.push({
         id: photo.id,
-        url: `/records/${row.id}/days/${day.date}/photos/${photo.id}`,
+        url: photoUrl(row.id, day.date, photo.id),
       });
     }
 
@@ -290,9 +309,11 @@ export class PrismaRecordsAdapter implements RecordsRepository {
   private toSummary(
     row: RecordRow,
     entries: DayRow[],
-    photos: DayRow[],
+    photos: PhotoRow[],
   ): RecordSummary {
     const days = [...entries, ...photos].map((row) => toDay(row.date)).sort();
+    // dayColumns 가 (date, id) 오름차순으로 읽으므로 첫 행이 곧 대표 사진이다
+    const cover = photos.at(0);
     return {
       id: row.id,
       title: row.title,
@@ -302,6 +323,9 @@ export class PrismaRecordsAdapter implements RecordsRepository {
       entryCount: entries.length,
       startDate: days.at(0) ?? null,
       endDate: days.at(-1) ?? null,
+      coverPhoto: cover
+        ? { id: cover.id, url: photoUrl(row.id, toDay(cover.date), cover.id) }
+        : null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };

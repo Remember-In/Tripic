@@ -75,6 +75,8 @@ class FakeRecords implements RecordsRepository {
       entryCount: 0,
       startDate: null,
       endDate: null,
+      // 대표 사진 선정은 영속성 관심사라 서비스에 로직이 없다 — 행위 검증은 e2e 에 둔다
+      coverPhoto: null,
       createdAt: now,
       updatedAt: now,
     };

@@ -30,6 +30,10 @@ const summarySchema = z.object({
   entryCount: z.number().int(),
   startDate: z.string().nullable(),
   endDate: z.string().nullable(),
+  /** 목록에서 바로 보여줄 대표 사진 — 사진이 없으면 null (docs/11 §3) */
+  coverPhoto: z
+    .object({ id: z.string().min(1), url: z.string().min(1) })
+    .nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -582,6 +586,64 @@ describe("Records (e2e)", () => {
     expect(summary?.entryCount).toBe(0);
     expect(summary?.startDate).toBe("2026-07-01");
     expect(summary?.endDate).toBe("2026-07-01");
+  });
+
+  it("사진이 없는 기록의 coverPhoto 는 null 이다", async () => {
+    const created = await createRecord(owner, "대표 사진 없음");
+
+    expect(created.coverPhoto).toBeNull();
+
+    const list = z
+      .array(summarySchema)
+      .parse(
+        await spec()
+          .get("/records")
+          .withBearerToken(owner)
+          .expectStatus(200)
+          .returns("res.body"),
+      );
+
+    expect(list.find((row) => row.id === created.id)?.coverPhoto).toBeNull();
+  });
+
+  /**
+   * 업로드 순서가 아니라 일차 순서가 기준이다 — 나중에 올린 1일차 사진이 대표가 된다.
+   * 단순히 "첫 업로드"를 고르면 이 케이스에서 갈린다.
+   */
+  it("coverPhoto 는 가장 이른 일차의 첫 사진이다", async () => {
+    const created = await createRecord(owner, "대표 사진 선정");
+
+    const uploadTo = async (date: string) =>
+      photoSchema.parse(
+        await spec()
+          .post(`/records/${created.id}/days/${date}/photos`)
+          .withBearerToken(owner)
+          .withMultiPartFormData("photo", await cleanJpeg(), {
+            filename: "trip.jpg",
+            contentType: "image/jpeg",
+          })
+          .expectStatus(201)
+          .returns("res.body"),
+      );
+
+    await uploadTo("2026-08-16");
+    const earlier = await uploadTo("2026-08-15");
+
+    const list = z
+      .array(summarySchema)
+      .parse(
+        await spec()
+          .get("/records")
+          .withBearerToken(owner)
+          .expectStatus(200)
+          .returns("res.body"),
+      );
+    const summary = list.find((row) => row.id === created.id);
+
+    expect(summary?.coverPhoto?.id).toBe(earlier.id);
+    expect(summary?.coverPhoto?.url).toBe(
+      `/records/${created.id}/days/2026-08-15/photos/${earlier.id}`,
+    );
   });
 
   it("전체 초기화는 내 기록만 지운다", async () => {
