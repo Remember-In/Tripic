@@ -235,7 +235,8 @@ DB의 Prisma enum(`apps/api/prisma/schema.prisma`)과 값이 동일하다.
 
 ## 6. Phase 3 예고 — record_places (검토 후)
 
-위치정보지원센터 검토 통과 시 추가할 계약의 방향만 적어둔다 (상세 설계는 별도).
+위치정보지원센터 검토 통과 시 추가할 계약의 방향이다. 상세 API·집계·오류·테스트 계약은
+[16-visit-region-api-design.md](./16-visit-region-api-design.md)에 정의한다.
 
 - `POST /records/:id/places` — 사용자가 확정한 KTO `contentId` + 방문일 + 지역/분류 코드만
 - `PATCH /records/:id/places/:placeId` · `DELETE /records/:id/places/:placeId` — 기록 상세의

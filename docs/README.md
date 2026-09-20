@@ -22,6 +22,7 @@
 | [13-operations-api-design.md](./13-operations-api-design.md)       | 운영 API 응답 계약 (app-config·notices·version)     | —           |
 | [14-apple-login-design.md](./14-apple-login-design.md)             | Sign in with Apple 로그인·알림·탈퇴 revoke 설계     | —           |
 | [15-web-client-server-design.md](./15-web-client-server-design.md) | 웹 카카오 로그인·세션 쿠키·TourAPI 프록시 설계      | —           |
+| [16-visit-region-api-design.md](./16-visit-region-api-design.md)   | 방문 관광지 저장·지도 진행률 API 계약 (검토 대기)   | —           |
 
 ## 배포 정책 문서
 
