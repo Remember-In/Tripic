@@ -13,6 +13,7 @@ pnpm --filter @tripic/web dev
 VITE_KAKAO_REST_API_KEY=<카카오 REST API 키>
 VITE_KAKAO_REDIRECT_URI=http://127.0.0.1:5173/auth/kakao/callback
 TRIPIC_API_PROXY_TARGET=https://tripic.remin.dev
+VITE_VISIT_REGION_API_ENABLED=false
 ```
 
 ## 카카오 개발자 콘솔
@@ -38,5 +39,9 @@ TRIPIC_API_PROXY_TARGET=https://tripic.remin.dev
 장소 선택 UI는 서버의 `KtoListItem` 계약을 사용한다. 방문 지역 저장 API가 추가되기 전까지 장소 선택은 선택 사항이며 기록 생성 자체를 막지 않는다. 추후 방문 기록 API 연결 시 `RecordCreatePage`의 `selectedPlace`를 그대로 전달하고, 지역 진행률 응답을 `HomePage`의 `TravelMap`에 주입한다.
 
 개인정보 처리방침과 서비스 이용약관은 인증 없이 각각 `/privacy`, `/terms`에서 확인할 수 있다.
+
+방문 관광지·지도 진행률 클라이언트는 미리 연결돼 있다. 서버 API가 배포되고 계약 검증이 끝난 뒤
+Vercel의 `VITE_VISIT_REGION_API_ENABLED`를 `true`로 바꾸면 장소 저장·수정·삭제와 지도 스탬프 조회가
+활성화된다. 기본값은 `false`이므로 서버 미배포 상태에서 기존 기록 기능에 영향을 주지 않는다.
 
 카카오 REST API 키의 클라이언트 시크릿이 활성화되어 있으므로 API 배포 환경에는 `KAKAO_CLIENT_SECRET`을 반드시 비밀 환경변수로 설정한다. 이 값은 웹 번들 또는 Git에 포함하면 안 된다.

@@ -255,8 +255,10 @@ button:disabled {
   overflow: hidden;
 }
 .korea-map {
-  width: min(100%, 470px);
-  max-height: 500px;
+  display: block;
+  width: min(100%, 415px);
+  height: auto;
+  aspect-ratio: 524 / 631;
   overflow: visible;
 }
 .map-region {
@@ -462,6 +464,53 @@ button:disabled {
   background: #f2f8e7;
   border-radius: 18px;
   line-height: 1.65;
+}
+.detail-notice {
+  margin: 0 0 24px;
+}
+.stored-places-card {
+  margin-bottom: 24px;
+}
+.stored-place-list {
+  display: grid;
+  gap: 10px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+.stored-place-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: #f7f7f4;
+  border-radius: 16px;
+}
+.stored-place-item div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+.stored-place-item span,
+.stored-place-item time {
+  color: var(--muted);
+  font-size: 13px;
+}
+.stored-place-list.editable {
+  margin-bottom: 22px;
+}
+.stored-place-list.editable .stored-place-item {
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 0.4fr) auto;
+}
+.stored-place-list.editable input {
+  margin: 0;
+}
+.place-add-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 0.5fr) auto;
+  gap: 10px;
+  margin-top: 16px;
 }
 
 .settings-page {
@@ -806,6 +855,10 @@ button:disabled {
   .field-row {
     grid-template-columns: 1fr;
     gap: 0;
+  }
+  .stored-place-list.editable .stored-place-item,
+  .place-add-row {
+    grid-template-columns: 1fr;
   }
   .search-row {
     grid-template-columns: minmax(0, 1fr) 78px;

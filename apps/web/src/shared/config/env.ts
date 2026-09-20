@@ -18,3 +18,7 @@ export function kakaoLoginConfig() {
     ),
   };
 }
+
+export function visitRegionApiEnabled() {
+  return import.meta.env.VITE_VISIT_REGION_API_ENABLED === "true";
+}
