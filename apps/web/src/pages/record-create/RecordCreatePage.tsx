@@ -15,6 +15,7 @@ import {
 } from "@/entities/tourist-place/api/searchTouristPlaces";
 import { visitRegionApiEnabled } from "@/shared/config/env";
 import { preparePhoto } from "@/shared/lib/image/preparePhoto";
+import { readPhotoTakenDate } from "@/shared/lib/image/readPhotoTakenDate";
 
 function today() {
   const now = new Date();
@@ -36,12 +37,33 @@ export function RecordCreatePage() {
   const [note, setNote] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [dateHint, setDateHint] = useState(
+    "사진을 선택하면 첫 사진의 촬영일을 자동으로 확인합니다.",
+  );
   const [keyword, setKeyword] = useState("");
   const [places, setPlaces] = useState<TouristPlace[]>([]);
   const [selectedPlace, setSelectedPlace] = useState<TouristPlace | null>(null);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const selectPhotos = async (selectedFiles: File[]) => {
+    const nextFiles = selectedFiles.slice(0, 20);
+    setFiles(nextFiles);
+    if (nextFiles.length === 0) {
+      setDateHint("사진을 선택하면 첫 사진의 촬영일을 자동으로 확인합니다.");
+      return;
+    }
+
+    setDateHint("사진 촬영일을 확인하는 중…");
+    const takenDate = await readPhotoTakenDate(nextFiles[0]);
+    if (takenDate) {
+      setDate(takenDate);
+      setDateHint(`첫 사진의 촬영일 ${takenDate}로 자동 입력했습니다.`);
+      return;
+    }
+    setDateHint("촬영일 정보가 없어 현재 입력된 날짜를 사용합니다.");
+  };
 
   const search = async () => {
     if (!keyword.trim()) return;
@@ -161,9 +183,7 @@ export function RecordCreatePage() {
               accept="image/*"
               multiple
               onChange={(event) =>
-                setFiles(
-                  Array.from(event.currentTarget.files ?? []).slice(0, 20),
-                )
+                void selectPhotos(Array.from(event.currentTarget.files ?? []))
               }
               type="file"
             />
@@ -199,11 +219,15 @@ export function RecordCreatePage() {
             <label>
               <span>방문 날짜</span>
               <input
-                onChange={(event) => setDate(event.target.value)}
+                onChange={(event) => {
+                  setDate(event.target.value);
+                  setDateHint("방문 날짜를 직접 수정했습니다.");
+                }}
                 required
                 type="date"
                 value={date}
               />
+              <small className="field-hint">{dateHint}</small>
             </label>
           </div>
           <label>

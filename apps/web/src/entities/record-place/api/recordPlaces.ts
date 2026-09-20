@@ -9,7 +9,7 @@ export type RecordPlace = {
   createdAt: string;
   id: string;
   recordId: string;
-  sigunguCode?: string;
+  sigunguCode: string | null;
   visitedAt: string;
 };
 

@@ -1,8 +1,11 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import type { RegionProgress } from "@tripic/shared";
 import { Link } from "react-router-dom";
 
-import { getMapProgress } from "@/entities/record-place/api/recordPlaces";
+import {
+  getMapProgress,
+  listRecordPlaces,
+} from "@/entities/record-place/api/recordPlaces";
 import { listRecords } from "@/entities/record/api/records";
 import { visitRegionApiEnabled } from "@/shared/config/env";
 import { TravelMap } from "@/widgets/travel-map/TravelMap";
@@ -24,6 +27,8 @@ const PREVIEW_REGION_PROGRESS: RegionProgress[] = [
   },
 ];
 
+const PREVIEW_SIGUNGU_KEYS = new Set(["1:23", "6:16"]);
+
 function previewEnabled() {
   return (
     import.meta.env.DEV && sessionStorage.getItem("tripic-preview") === "1"
@@ -40,6 +45,16 @@ export function HomePage() {
     queryKey: ["map-progress"],
     retry: false,
   });
+  const recordPlaceQueries = useQueries({
+    queries:
+      !isPreview && regionApiEnabled
+        ? (records.data ?? []).map((record) => ({
+            queryFn: () => listRecordPlaces(record.id),
+            queryKey: ["record-places", record.id],
+            retry: false,
+          }))
+        : [],
+  });
   const regionProgress = isPreview
     ? PREVIEW_REGION_PROGRESS
     : (progress.data?.regions ?? []);
@@ -48,6 +63,15 @@ export function HomePage() {
       .filter((region) => region.visitCount > 0)
       .map((region) => region.areaCode),
   );
+  const visitedSigunguKeys = isPreview
+    ? PREVIEW_SIGUNGU_KEYS
+    : new Set(
+        recordPlaceQueries.flatMap((query) =>
+          (query.data ?? []).flatMap((place) =>
+            place.sigunguCode ? [`${place.areaCode}:${place.sigunguCode}`] : [],
+          ),
+        ),
+      );
 
   return (
     <main className="page home-layout">
@@ -63,10 +87,14 @@ export function HomePage() {
         </div>
         <div className="map-card">
           <div className="map-preview" aria-label="대한민국 여행 지도">
-            <TravelMap visitedAreaCodes={visitedAreaCodes} />
+            <TravelMap
+              visitedAreaCodes={visitedAreaCodes}
+              visitedSigunguKeys={visitedSigunguKeys}
+            />
           </div>
           <p className="map-caption">
-            키워드로 확정한 방문 지역이 이 지도에 스탬프로 표시됩니다.
+            지역을 눌러 시·군·구까지 확인할 수 있습니다. 확정한 방문지는
+            연두색으로 표시됩니다.
           </p>
         </div>
       </section>
