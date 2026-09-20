@@ -1,4 +1,3 @@
-import * as AppleAuthentication from "expo-apple-authentication";
 import { useRouter, type Href } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -6,6 +5,7 @@ import {
   Alert,
   Pressable,
   StyleSheet,
+  Text,
   View,
 } from "react-native";
 
@@ -18,7 +18,7 @@ import {
 import { useAuthSession } from "@/features/auth-session";
 import { loginWithKakao } from "@/features/kakao-login";
 import { KakaoSymbol } from "@/shared/assets/login";
-import { radii, semanticColors, spacing } from "@/shared/config/theme";
+import { palette, radii, semanticColors, spacing } from "@/shared/config/theme";
 import { AppText, Screen } from "@/shared/ui";
 
 type LoginMethod = "APPLE" | "KAKAO" | null;
@@ -26,11 +26,10 @@ type LoginMethod = "APPLE" | "KAKAO" | null;
 export function LoginPage() {
   const router = useRouter();
   const appConfigQuery = useAppConfigQuery();
-  const { continueAsGuest, establishSession } = useAuthSession();
+  const { establishSession } = useAuthSession();
   const [activeLogin, setActiveLogin] = useState<LoginMethod>(null);
   const [appleAvailable, setAppleAvailable] = useState(false);
-  const [isEnteringGuestMode, setEnteringGuestMode] = useState(false);
-  const isBusy = activeLogin !== null || isEnteringGuestMode;
+  const isBusy = activeLogin !== null;
   const showAppleLogin =
     appleAvailable && appConfigQuery.data?.features.appleLogin === true;
 
@@ -39,14 +38,10 @@ export function LoginPage() {
 
     void isAppleLoginAvailable()
       .then((available) => {
-        if (active) {
-          setAppleAvailable(available);
-        }
+        if (active) setAppleAvailable(available);
       })
       .catch(() => {
-        if (active) {
-          setAppleAvailable(false);
-        }
+        if (active) setAppleAvailable(false);
       });
 
     return () => {
@@ -60,29 +55,27 @@ export function LoginPage() {
       provider: "APPLE" | "KAKAO",
     ) => {
       await establishSession(result, provider);
-      const destination =
-        result.isNewUser || !result.user.nickname
+      router.replace(
+        (result.isNewUser || !result.user.nickname
           ? "/onboarding/nickname"
-          : "/";
-      router.replace(destination as Href);
+          : "/") as Href,
+      );
     },
     [establishSession, router],
   );
 
   const startAppleLogin = useCallback(async () => {
-    if (isBusy) {
-      return;
-    }
-
+    if (isBusy) return;
     setActiveLogin("APPLE");
-
     try {
       await finishLogin(await loginWithApple(), "APPLE");
     } catch (error) {
       if (!(error instanceof AppleLoginCancelledError)) {
         Alert.alert(
           "Apple 로그인에 실패했어요",
-          error instanceof Error ? error.message : "잠시 후 다시 시도해 주세요.",
+          error instanceof Error
+            ? error.message
+            : "잠시 후 다시 시도해 주세요.",
         );
       }
     } finally {
@@ -91,12 +84,8 @@ export function LoginPage() {
   }, [finishLogin, isBusy]);
 
   const startKakaoLogin = useCallback(async () => {
-    if (isBusy) {
-      return;
-    }
-
+    if (isBusy) return;
     setActiveLogin("KAKAO");
-
     try {
       await finishLogin(await loginWithKakao(), "KAKAO");
     } catch (error) {
@@ -109,120 +98,98 @@ export function LoginPage() {
     }
   }, [finishLogin, isBusy]);
 
-  const startAsGuest = useCallback(async () => {
-    if (isBusy) {
-      return;
-    }
-
-    setEnteringGuestMode(true);
-    try {
-      await continueAsGuest();
-      router.replace("/");
-    } catch {
-      Alert.alert(
-        "게스트 모드를 시작하지 못했어요",
-        "잠시 후 다시 시도해 주세요.",
-      );
-    } finally {
-      setEnteringGuestMode(false);
-    }
-  }, [continueAsGuest, isBusy, router]);
-
   return (
-    <Screen>
+    <Screen
+      statusBarBackgroundColor={semanticColors.brand.primary}
+      statusBarStyle="dark"
+      style={styles.screen}
+    >
       <View style={styles.content}>
-        <View style={styles.introduction}>
-          <AppText variant="heading03">여행의 순간을 기록해요</AppText>
-          <AppText tone="tertiary" variant="body02">
-            사진으로 방문지를 찾고 나만의 여행 지도를 채워 보세요.
+        <View style={styles.brand}>
+          <AppText style={styles.brandName}>Tripic</AppText>
+          <AppText style={styles.tagline} variant="body02">
+            사진으로 기록하는 나의 여행
           </AppText>
         </View>
 
         <View style={styles.actions}>
           {showAppleLogin ? (
-            <View
-              pointerEvents={isBusy ? "none" : "auto"}
-              style={isBusy ? styles.disabled : undefined}
-            >
-              <AppleAuthentication.AppleAuthenticationButton
-                buttonStyle={
-                  AppleAuthentication.AppleAuthenticationButtonStyle.BLACK
-                }
-                buttonType={
-                  AppleAuthentication.AppleAuthenticationButtonType.CONTINUE
-                }
-                cornerRadius={radii.large}
-                onPress={() => void startAppleLogin()}
-                style={styles.appleButton}
-              />
-              {activeLogin === "APPLE" ? (
-                <View pointerEvents="none" style={styles.appleLoading}>
-                  <ActivityIndicator color="#FFFFFF" size="small" />
+            <LoginButton
+              accessibilityLabel="Apple로 시작하기"
+              disabled={isBusy}
+              loading={activeLogin === "APPLE"}
+              onPress={() => void startAppleLogin()}
+              symbol={
+                <View style={styles.appleSymbolBackground}>
+                  <Text style={styles.appleSymbol}></Text>
                 </View>
-              ) : null}
-            </View>
+              }
+              text="Apple로 시작하기"
+            />
           ) : null}
 
-          <Pressable
-            accessibilityHint="카카오 계정으로 로그인합니다."
+          <LoginButton
             accessibilityLabel="카카오로 시작하기"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: isBusy }}
             disabled={isBusy}
+            loading={activeLogin === "KAKAO"}
             onPress={() => void startKakaoLogin()}
-            style={({ pressed }) => [
-              styles.kakaoButton,
-              isBusy && styles.disabled,
-              pressed && styles.pressed,
-            ]}
-          >
-            <View style={styles.symbolBackground}>
-              <KakaoSymbol
-                accessible={false}
-                height={14.933}
-                pointerEvents="none"
-                width={16}
-              />
-            </View>
-
-            {activeLogin === "KAKAO" ? (
-              <ActivityIndicator
-                color={semanticColors.text.primary}
-                size="small"
-              />
-            ) : (
-              <AppText style={styles.label} variant="button03">
-                카카오로 시작하기
-              </AppText>
-            )}
-          </Pressable>
-
-          <Pressable
-            accessibilityLabel="로그인 없이 둘러보기"
-            accessibilityRole="button"
-            accessibilityState={{ disabled: isBusy }}
-            disabled={isBusy}
-            onPress={() => void startAsGuest()}
-            style={({ pressed }) => [
-              styles.guestButton,
-              isBusy && styles.disabled,
-              pressed && styles.pressed,
-            ]}
-          >
-            {isEnteringGuestMode ? (
-              <ActivityIndicator
-                color={semanticColors.text.secondary}
-                size="small"
-              />
-            ) : (
-              <AppText tone="secondary" variant="button05">
-                로그인 없이 둘러보기
-              </AppText>
-            )}
-          </Pressable>
+            symbol={
+              <View style={styles.kakaoSymbolBackground}>
+                <KakaoSymbol
+                  accessible={false}
+                  height={15}
+                  pointerEvents="none"
+                  width={16}
+                />
+              </View>
+            }
+            text="카카오로 시작하기"
+          />
         </View>
       </View>
     </Screen>
+  );
+}
+
+type LoginButtonProps = {
+  accessibilityLabel: string;
+  disabled: boolean;
+  loading: boolean;
+  onPress: () => void;
+  symbol: React.ReactNode;
+  text: string;
+};
+
+function LoginButton({
+  accessibilityLabel,
+  disabled,
+  loading,
+  onPress,
+  symbol,
+  text,
+}: LoginButtonProps) {
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.loginButton,
+        disabled && styles.disabled,
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={styles.symbol}>{symbol}</View>
+      {loading ? (
+        <ActivityIndicator color={semanticColors.text.primary} size="small" />
+      ) : (
+        <AppText style={styles.loginLabel} variant="button03">
+          {text}
+        </AppText>
+      )}
+    </Pressable>
   );
 }
 
@@ -230,62 +197,73 @@ const styles = StyleSheet.create({
   actions: {
     gap: spacing.sm,
   },
-  appleButton: {
-    height: 60,
-    width: "100%",
+  appleSymbol: {
+    color: palette.gray.white,
+    fontFamily: "System",
+    fontSize: 22,
+    lineHeight: 25,
   },
-  appleLoading: {
+  appleSymbolBackground: {
     alignItems: "center",
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#000000",
-    borderRadius: radii.large,
+    backgroundColor: palette.gray.black,
+    borderRadius: radii.pill,
+    height: 28,
     justifyContent: "center",
+    width: 28,
+  },
+  brand: {
+    alignItems: "center",
+    gap: spacing.xxs,
+  },
+  brandName: {
+    color: palette.gray.white,
+    fontSize: 48,
+    fontWeight: "700",
+    letterSpacing: -1.5,
+    lineHeight: 58,
   },
   content: {
     flex: 1,
     justifyContent: "space-between",
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.xl,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.xxl * 2,
+    paddingTop: 236,
   },
   disabled: {
-    opacity: 0.64,
+    opacity: 0.62,
   },
-  guestButton: {
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 48,
-  },
-  introduction: {
-    gap: spacing.sm,
-    paddingTop: spacing.xxl,
-  },
-  kakaoButton: {
+  kakaoSymbolBackground: {
     alignItems: "center",
     backgroundColor: "#FEE500",
-    borderRadius: radii.large,
-    justifyContent: "center",
-    minHeight: 60,
-    paddingVertical: spacing.md,
-    position: "relative",
-    width: "100%",
-  },
-  label: {
-    flexShrink: 1,
-    paddingHorizontal: spacing.xxl * 2,
-    textAlign: "center",
-    width: "100%",
-  },
-  pressed: {
-    opacity: 0.72,
-  },
-  symbolBackground: {
-    alignItems: "center",
     borderRadius: radii.pill,
     height: 28,
     justifyContent: "center",
+    width: 28,
+  },
+  loginButton: {
+    alignItems: "center",
+    backgroundColor: semanticColors.background.surface,
+    borderRadius: radii.large,
+    flexDirection: "row",
+    justifyContent: "center",
+    minHeight: 60,
+    paddingHorizontal: spacing.xl,
+    position: "relative",
+  },
+  loginLabel: {
+    textAlign: "center",
+  },
+  pressed: {
+    opacity: 0.76,
+  },
+  screen: {
+    backgroundColor: semanticColors.brand.primary,
+  },
+  symbol: {
     left: spacing.xl,
     position: "absolute",
-    width: 28,
+  },
+  tagline: {
+    color: palette.gray.white,
   },
 });

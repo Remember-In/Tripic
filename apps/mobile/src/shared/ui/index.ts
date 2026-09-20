@@ -1,4 +1,5 @@
 export { AppText, type AppTextProps } from "./AppText";
+export { BrandSplash } from "./BrandSplash";
 export {
   FloatingIconButton,
   type FloatingIconButtonProps,

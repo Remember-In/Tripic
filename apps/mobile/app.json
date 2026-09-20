@@ -6,6 +6,10 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#99CB47",
+      "resizeMode": "contain"
+    },
     "plugins": [
       "expo-router",
       "expo-sqlite",
@@ -34,6 +38,7 @@
       "typedRoutes": true
     },
     "ios": {
+      "icon": "./assets/Tripic.icon",
       "supportsTablet": false,
       "bundleIdentifier": "com.tripic.app",
       "usesAppleSignIn": true,

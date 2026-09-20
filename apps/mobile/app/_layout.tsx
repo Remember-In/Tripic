@@ -30,6 +30,7 @@ import {
   LocalRecordsProvider,
 } from "@/features/local-records";
 import { fontAssets } from "@/shared/assets/fonts";
+import { BrandSplash } from "@/shared/ui";
 import {
   clearLastLocalUserId,
   readLastLocalUserId,
@@ -130,7 +131,7 @@ export default function RootLayout() {
   }
 
   if (!fontsLoaded) {
-    return null;
+    return <BrandSplash />;
   }
 
   return (

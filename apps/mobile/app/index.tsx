@@ -2,6 +2,7 @@ import { Redirect, type Href } from "expo-router";
 
 import { useAuthSession } from "@/features/auth-session";
 import { HomePage } from "@/pages/home";
+import { BrandSplash } from "@/shared/ui";
 
 const loginRoute = "/login" as Href;
 const nicknameRoute = "/onboarding/nickname" as Href;
@@ -10,10 +11,10 @@ export default function IndexRoute() {
   const { status, user } = useAuthSession();
 
   if (status === "restoring") {
-    return null;
+    return <BrandSplash />;
   }
 
-  if (status === "unauthenticated") {
+  if (status === "unauthenticated" || status === "guest") {
     return <Redirect href={loginRoute} />;
   }
 
