@@ -13,6 +13,27 @@ class RotationConflict extends Error {}
 export class PrismaRefreshTokensAdapter implements RefreshTokens {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * 살아 있는 세션 조회 — access token 검증마다 호출된다 (docs/10 §3).
+   *
+   * rotation 은 항상 family 안에 미사용 행 하나를 남기므로, 그 행이 없다는 것은
+   * 로그아웃(revoke)했거나 탈퇴(cascade 삭제)했다는 뜻이다.
+   * `@@index([familyId])` 를 타고 `select` 로 userId 만 읽는다.
+   */
+  async findActiveByFamily(
+    familyId: string,
+  ): Promise<{ userId: string } | null> {
+    return this.prisma.refreshToken.findFirst({
+      where: {
+        familyId,
+        revokedAt: null,
+        replacedById: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: { userId: true },
+    });
+  }
+
   async findByHash(tokenHash: string): Promise<StoredRefreshToken | null> {
     // 탈퇴하면 이 행 자체가 cascade 로 사라지므로 사용자 상태를 함께 조회할 필요가 없다
     const row = await this.prisma.refreshToken.findUnique({

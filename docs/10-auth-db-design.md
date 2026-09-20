@@ -88,8 +88,15 @@ JWT를 refresh 토큰으로 쓰지 않는 이유: 즉시 폐기(서버 측 무�
 - 초기 스키마의 `UserStatus`/`status`/`deletedAt`(soft delete 대비용)은 이 결정으로 폐기 —
   마이그레이션 `drop_soft_delete` 로 컬럼·enum 을 제거했고 `status === "ACTIVE"` 검사 코드도
   걷어냈다. 탈퇴 계정의 refresh 토큰은 별도 검사 없이 cascade 로 행이 사라져 401 이 된다.
-- access token은 서버 미저장이라 탈퇴 후 최대 15분(TTL) 유효할 수 있다 — 허용 가능한
-  트레이드오프. 다만 `/users/me` 등 DB 조회 라우트는 행이 없어 즉시 401이 된다.
+- access token은 서버에 저장하지 않지만 **즉시 무효화된다.** 토큰에 rotation `familyId`(`fam` claim)를
+  담고, `JwtAuthGuard` 가 매 요청 그 family 의 살아 있는 refresh token 행을 조회한다.
+  로그아웃하면 family 가 revoke 되고, 탈퇴하면 cascade 로 행이 사라져 둘 다 그 즉시 401이 된다.
+  `@@index([familyId])` 를 타는 단일 조회이며 `@Public()` 라우트는 조회하지 않는다.
+  - 이전에는 서명만 검증해서 로그아웃·탈퇴 뒤에도 최대 15분(TTL) 동안 통과했다. 특히 `/records` 는
+    `userId` 로 필터만 하므로 401이 아니라 `[]` + 200 을 돌려줘 화면이 정상처럼 보였다.
+  - family 를 담지 않은 구 access token 은 401이 된다. 클라이언트는 401에서 refresh 로 새 토큰을
+    받아 재시도하므로(웹 `http.ts`, 모바일 `AuthSessionProvider`) 사용자에게는 드러나지 않는다.
+  - 연결 해제(consent-revoked)처럼 `revokeAllForUser` 를 부르는 경로도 access token 까지 함께 끊는다.
 - 실수 탈퇴 복구는 지원하지 않는다(유예 기간 없음) — 탈퇴 확인 UX로 대응.
 
 ## 4. ERD
