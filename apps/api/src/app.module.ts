@@ -9,6 +9,7 @@ import { HealthModule } from "@/health/health.module";
 import { AppConfigModule } from "@/app-config/app-config.module";
 import { NoticesModule } from "@/notices/notices.module";
 import { VersionModule } from "@/version/version.module";
+import { TourismModule } from "@/tourism/tourism.module";
 
 /**
  * Tripic 운영 + 계정/인증 API (PRD 10.3 / 14.2, docs/10-auth-db-design.md).
@@ -31,6 +32,7 @@ import { VersionModule } from "@/version/version.module";
     AppConfigModule,
     NoticesModule,
     VersionModule,
+    TourismModule,
   ],
 })
 export class AppModule {}

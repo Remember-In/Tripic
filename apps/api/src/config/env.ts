@@ -123,6 +123,12 @@ export const envSchema = z
     /** 카카오 콘솔에서 Client Secret 을 활성화한 경우에만 설정한다 */
     KAKAO_WEB_CLIENT_SECRET: z.string().min(1).optional(),
 
+    /**
+     * TourAPI 서버 프록시 서비스키 (docs/15 §4). 비우면 /tourism 만 503 으로 꺼진 채 기동한다.
+     * 공공데이터포털 일반 인증키의 디코딩 값을 권장한다 — 인코딩 값이어도 한 번 디코딩해 쓴다.
+     */
+    KTO_SERVICE_KEY: z.string().min(1).optional(),
+
     PORT: z.coerce.number().int().default(3000),
 
     /**
