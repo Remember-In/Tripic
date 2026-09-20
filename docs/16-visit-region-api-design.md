@@ -47,7 +47,7 @@
 ```ts
 type CreateRecordPlaceInput = {
   contentId: string;
-  visitedAt: string; // ISO 8601
+  visitedAt: string; // YYYY-MM-DD (entryDateSchema)
 };
 ```
 
@@ -55,12 +55,38 @@ type CreateRecordPlaceInput = {
 `categoryCode`는 클라이언트 값을 신뢰하지 않고 서버가 KTO 상세 조회 결과에서 추출한다. 이 방식은 임의의
 지역코드를 보내 지도 스탬프를 조작하는 것을 방지한다.
 
+> **`visitedAt` 은 date-only(`YYYY-MM-DD`)로 확정한다.**
+>
+> 이 앱의 다른 "날짜" 개념이 전부 date-only 다 — 일기·사진의 일차는 `entryDateSchema`(`YYYY-MM-DD`)를
+> 쓰고, 모바일은 `DateOnlyString` branded type 으로 다룬다. "방문일" 도 같은 의미다.
+>
+> 결정적인 이유는 §3.1 의 중복 판정이다. datetime 이면 `00:00:00.000Z` 와 `00:00:01Z` 가 **서로 다른 행**
+> 이라 같은 날 같은 곳을 여러 번 저장할 수 있고, unique 제약이 의도대로 동작하지 않는다.
+> date-only 면 제약이 그대로 성립한다.
+>
+> 구현: 요청 검증은 기존 `entryDateSchema` 를 재사용하고, Prisma 컬럼은 `@db.Date` 로 맞춘다
+> (`RecordPhoto.date` 가 이미 같은 방식이다).
+>
+> **"시각 단위까지 저장하면 더 낫지 않나" 에 대한 답:**
+>
+> - **이미 남는다.** `RecordPlace.createdAt` 이 `DateTime @default(now())` 라 "언제 기록했는지" 는
+>   밀리초까지 저장된다. `visitedAt` 은 "언제 방문했는지" 로 성격이 다르다.
+> - **없는 정밀도를 지어내게 된다.** 웹의 날짜 선택 UI 가 주는 값은 날짜뿐이다
+>   (`RecordCreatePage` 가 `.toISOString().slice(0, 10)` 로 `YYYY-MM-DD` 를 만든다).
+>   `2026-09-20T00:00:00Z` 로 저장하면 그 시각은 아무 의미가 없다.
+> - **타임존 함정이 열린다.** KST `2026-09-20` 을 datetime 으로 저장하면 UTC 로는
+>   `2026-09-19T15:00:00Z` 다. 지도 집계와 중복 판정이 **하루씩 어긋날 수 있다.**
+>   `RecordPhoto.date` 가 `@db.Date` 인 것도 같은 이유다.
+>
+> 방문 시각이 정말 필요해지면 그때 별도 선택 필드를 더한다. 지금 datetime 으로 열어두고
+> 타임존 버그를 떠안는 것보다 낫다.
+
 ### 2.2 서버가 저장하는 값
 
 | 필드                      | 저장 여부          | 설명                                      |
 | ------------------------- | ------------------ | ----------------------------------------- |
 | `ktoContentId`            | 저장               | KTO 관광지 식별자                         |
-| `visitedAt`               | 저장               | 사용자가 확정한 방문일시                  |
+| `visitedAt`               | 저장               | 사용자가 확정한 방문일 (`YYYY-MM-DD`)     |
 | `areaCode`                | 저장               | KTO 상세 응답에서 검증한 시·도 코드       |
 | `sigunguCode`             | 선택 저장          | KTO 상세 응답에서 검증한 시·군·구 코드    |
 | `categoryCode`            | 선택 저장          | KTO 상세 응답에서 검증한 관광 유형 코드   |
@@ -80,6 +106,14 @@ type CreateRecordPlaceInput = {
 - 존재하지 않는 `contentId`: `404`
 - 서버의 `KTO_SERVICE_KEY` 미설정: `503`
 
+이 네 가지 매핑은 **v1.2.1 에 이미 구현돼 있다** — `KtoApiAdapter` 가 상류 오류를 `BadGatewayException`·
+`GatewayTimeoutException` 으로, `DisabledTourApiAdapter` 가 미설정을 `ServiceUnavailableException` 으로
+번역한다. `findDetail` 은 결과가 없으면 `null` 을 돌려주므로 404 변환은 호출하는 서비스가 한다.
+
+**쿼터 영향**: 장소 추가·`contentId` 변경마다 KTO 상세 호출이 1회 붙는다. 서버에 캐시를 두지 않는다는
+원칙(docs/15 §4.3)상 이 호출은 줄일 수 없으므로, 공공데이터포털 일일 쿼터 소진이 그만큼 빨라진다.
+쿼터가 문제가 되면 캐시가 아니라 **호출 빈도 자체**(예: 클라이언트가 이미 조회한 상세를 재사용)를 줄인다.
+
 ---
 
 ## 3. API 계약
@@ -94,7 +128,7 @@ Content-Type: application/json
 
 {
   "contentId": "126508",
-  "visitedAt": "2026-09-20T00:00:00.000Z"
+  "visitedAt": "2026-09-20"
 }
 ```
 
@@ -108,6 +142,13 @@ Content-Type: application/json
 
 동일 기록에서 `ktoContentId + visitedAt`이 완전히 같은 요청은 중복으로 간주해 `409`를 반환한다.
 이를 DB unique 제약으로도 고정한다.
+
+> **이 작업에는 DB 마이그레이션이 있다.** 현재 `RecordPlace` 에는 `@@unique` 가 없고 인덱스 두 개
+> (`[recordId]`, `[areaCode, sigunguCode]`)만 있다. `@@unique([recordId, ktoContentId, visitedAt])` 를
+> 추가하는 마이그레이션이 필요하다.
+>
+> v1.2.0·v1.2.1 은 마이그레이션이 없어 롤백이 이미지 교체로 끝났지만, 이번 릴리스는 다르다.
+> 배포 순서와 롤백 계획을 별도로 잡아야 한다.
 
 ### 3.2 기록의 방문 관광지 조회
 
@@ -124,7 +165,7 @@ GET /records/:recordId/places
     "areaCode": "1",
     "sigunguCode": "23",
     "categoryCode": "A02",
-    "visitedAt": "2026-09-20T00:00:00.000Z",
+    "visitedAt": "2026-09-20",
     "createdAt": "2026-09-20T05:20:00.000Z"
   }
 ]
@@ -141,7 +182,7 @@ Content-Type: application/json
 
 {
   "contentId": "126508",
-  "visitedAt": "2026-09-21T00:00:00.000Z"
+  "visitedAt": "2026-09-21"
 }
 ```
 
@@ -175,15 +216,15 @@ GET /map/progress
       "id": "1",
       "areaCode": "1",
       "visitCount": 2,
-      "firstVisitedAt": "2026-09-05T00:00:00.000Z",
-      "lastVisitedAt": "2026-09-20T00:00:00.000Z"
+      "firstVisitedAt": "2026-09-05",
+      "lastVisitedAt": "2026-09-20"
     },
     {
       "id": "6",
       "areaCode": "6",
       "visitCount": 1,
-      "firstVisitedAt": "2026-08-12T00:00:00.000Z",
-      "lastVisitedAt": "2026-08-12T00:00:00.000Z"
+      "firstVisitedAt": "2026-08-12",
+      "lastVisitedAt": "2026-08-12"
     }
   ]
 }
@@ -195,7 +236,7 @@ GET /map/progress
 - `visitCount`는 해당 `areaCode`의 장소 행 수다.
 - `visitedAreaCount`는 `visitCount > 0`인 서로 다른 `areaCode` 수다.
 - `recordedPlaceCount`는 사용자의 전체 장소 행 수다.
-- `totalAreaCount`는 현재 지도 기준 `17`이다.
+- `totalAreaCount`는 `@tripic/shared`의 `TOTAL_REGIONS`(= 17)를 쓴다. 숫자를 서버에 하드코딩하지 않는다.
 - `regions`에는 방문한 지역만 담고 `areaCode` 오름차순으로 정렬한다.
 - `id`는 별도 진행률 테이블 ID가 아니라 안정적인 식별을 위한 `areaCode`와 같은 값이다.
 
@@ -220,6 +261,33 @@ MapProgressResponse;
 좌표와 매칭 경위(`GPS_CANDIDATE`, `matchConfidence`)는 서버 계약에 포함하지 않는다. 서버에는 사용자가
 직접 확정한 결과만 도달해야 한다.
 
+### 4.1 이미 있는 것을 재사용한다
+
+| 기존 자산                                   | 용도                                                         |
+| ------------------------------------------- | ------------------------------------------------------------ |
+| `RegionProgress` (`types/index.ts`)         | `regions[]` 항목과 필드가 그대로 일치 — 새로 정의하지 않는다 |
+| `TOTAL_REGIONS = 17` (`constants/index.ts`) | `totalAreaCount` 를 하드코딩하지 않고 이 상수를 쓴다         |
+| `entryDateSchema` (`schemas/records.ts`)    | `visitedAt` 검증에 그대로 재사용 (§2.1 에서 date-only 확정)  |
+
+`RegionProgress` 는 `{ id, areaCode, visitCount, firstVisitedAt?, lastVisitedAt? }` 로 §3.5 응답의
+`regions[]` 와 이미 같다. 같은 모양을 두 번 정의하면 한쪽만 바뀌었을 때 조용히 어긋난다.
+
+특히 **웹이 이미 이 타입을 쓰고 있다** — `apps/web/src/pages/home/HomePage.tsx` 가
+`import type { RegionProgress } from "@tripic/shared"` 로 받아 미리보기 데이터를 만든다.
+새 모양을 정의하면 API 연결 시점에 웹을 고쳐야 한다.
+
+`packages/shared/src/types/index.ts` 는 **파일 분할 금지**다 — RN Metro 가 NodeNext `.js` specifier 를
+못 풀어서 한 파일로 유지한다. 필드·타입만 추가한다. zod 스키마는 `schemas/` 에 새 파일로 둬도 된다.
+
+### 4.2 요청 스키마는 `.strict()` 로 둔다
+
+§7.2 의 "요청에 `latitude`·`longitude`·`gps`·`exif` 가 포함되면 400" 은 **기본 설정으로는 통과하지 못한다.**
+zod 객체는 기본이 strip 이라 모르는 키를 조용히 버리고 검증을 통과시킨다. 좌표 필드를 거부하려면
+`createRecordPlaceSchema`·`updateRecordPlaceSchema` 에 `.strict()` 를 명시해야 한다.
+
+이건 "스키마가 통과했으니 안전하다" 가 성립하지 않는 대표적인 경우다. 같은 이유로 `webAuthTokensSchema`
+에서도 `.omit()` 만으로는 응답 본문 누출을 막지 못해 e2e 에 별도 단언을 뒀다 (docs/15 §3).
+
 ---
 
 ## 5. 서버 구현 구조
@@ -240,7 +308,12 @@ map/
   adapters/prisma-map-progress.adapter.ts
 ```
 
-- KTO 조회는 기존 `KtoClientPort`를 재사용한다.
+- KTO 조회는 기존 포트를 재사용한다. 실제 이름은 `KtoClientPort` 가 아니라 토큰 `KTO_CLIENT` ·
+  인터페이스 `KtoClient` 이고 위치는 `apps/api/src/tourism/ports/kto-client.port.ts` 다.
+  - **`TourismModule` 에 `exports` 가 없어 지금 상태로는 다른 모듈이 주입받을 수 없다.**
+    `TourismModule` 에 `exports: [KTO_CLIENT]` 를, `RecordsModule` 에 `imports: [TourismModule]` 를 추가한다.
+  - `TourismService.findDetail` 은 결과가 없을 때 `NotFoundException` 을 던지지만
+    `KtoClient.findDetail` 은 `null` 을 돌려준다. 포트를 직접 주입한다면 404 변환은 호출하는 쪽이 한다.
 - 컨트롤러는 Zod 검증과 서비스 위임만 담당한다.
 - 장소 저장과 중복 검사에 필요한 트랜잭션·unique 경합은 Prisma adapter가 흡수한다.
 - 진행률 조회는 `RecordPlace → Record.userId` 조건으로 DB에서 집계한다.
@@ -308,5 +381,8 @@ map/
 - [ ] 서버 저장 가능 범위(`contentId`, 방문일, 지역코드) 확인
 - [ ] 개인정보 처리방침에 계정 연결 방문 이력 처리 목적·보관·삭제 반영
 - [ ] 위치기반서비스 이용약관/사업 신고 필요 여부 확정
-- [ ] `apps/api/AGENTS.md`와 금지 규칙을 상담 결과에 맞게 갱신
+- [ ] `apps/api/AGENTS.md`와 `apps/api/CLAUDE.md`의 금지 규칙을 상담 결과에 맞게 갱신
+      (CLAUDE.md 에 "방문 관광지(record_places) API는 위치정보지원센터 사전 검토 전까지 노출하지
+      않는다" 가 그대로 있다)
+- [ ] `@@unique([recordId, ktoContentId, visitedAt])` 마이그레이션 계획·롤백 절차 수립 (§3.1)
 - [ ] 본 계약 최종 리뷰 후 shared schema부터 TDD로 구현
