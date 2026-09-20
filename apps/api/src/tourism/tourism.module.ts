@@ -19,5 +19,7 @@ import type { Env } from "@/config/env";
         selectKtoClient(readTourismConfig(config)),
     },
   ],
+  // RecordsModule 이 방문 관광지 검증에 같은 포트를 쓴다 (docs/16 §5)
+  exports: [KTO_CLIENT],
 })
 export class TourismModule {}
