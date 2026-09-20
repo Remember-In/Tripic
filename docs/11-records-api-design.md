@@ -178,7 +178,11 @@ date, data bytea, mimeType, size, createdAt)` — 마이그레이션 `add_record
 
 - 업로드는 `multipart/form-data` 의 `photo` 필드. 스트림 단계에서 **1MB** 로 자른다.
 - 검증은 sharp(libvips) 로 실제 디코딩해 포맷(jpeg/webp)·크기를 확인하고,
-  `exif`·`xmp`·`iptc`·`icc` 가 하나라도 있으면 **400**(`photo rejected: HAS_METADATA`).
+  `exif`·`xmp`·`iptc` 가 하나라도 있으면 **400**(`photo rejected: HAS_METADATA`).
+  **`icc` 는 거부하지 않는다** — 색상 해석용 프로파일이라 좌표·작성자 정보를 담지 않고, 아래
+  "재인코딩" 약속을 지키면 브라우저가 sRGB 프로파일을 자동으로 붙이기 때문이다
+  (`canvas.toBlob()` 에는 이를 끄는 옵션이 없다). 거부 목록에 넣으면 **올바르게 소독한 사진이
+  오히려 전부 막힌다** — v1.3.1 까지 실제로 그랬다 (4c9c159).
 - 디코딩 폭탄 방어는 `limitInputPixels`(4096×4096) + 변 길이 4096px 제한.
 - 할당량: 파일당 1MB, **기록당 20장**, **사용자 총 100MB** — 초과 시 **413**.
   할당량은 디코딩 **전에** 검사해 한도 초과 요청에 CPU 를 쓰지 않는다.

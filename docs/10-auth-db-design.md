@@ -287,9 +287,10 @@ erDiagram
 
 ### 8.1 DATABASE_URL 의 sslmode
 
-운영 접속 문자열에는 **`sslmode=verify-full` 을 명시한다.**
+접속 문자열의 `sslmode` 가 `require`·`prefer`·`verify-ca` 면 **서버가 `verify-full` 로 고정한 뒤**
+드라이버에 넘긴다 (`src/prisma/connection-string.ts`). 환경변수는 손대지 않아도 된다.
 
-명시하지 않거나 `require`·`prefer`·`verify-ca` 를 쓰면 부팅 때마다 이 경고가 찍힌다:
+그대로 넘기면 부팅 때마다 이 경고가 찍힌다:
 
 > SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for
 > 'verify-full'. In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes
@@ -297,12 +298,13 @@ erDiagram
 
 지금은 `pg` 가 이 값들을 `verify-full` 로 취급하지만, 다음 메이저에서 libpq 의미(인증서·호스트명
 검증 없음)로 바뀐다. 즉 **값을 그대로 두면 라이브러리 업그레이드만으로 검증이 조용히 약해진다.**
-`verify-full` 을 적어 두면 동작은 지금과 같고 그 변경에 영향받지 않는다.
+`verify-full` 로 고정해 두면 동작은 지금과 같고 그 변경에 영향받지 않는다.
 
-`uselibpqcompat=true&sslmode=require` 로 경고를 없애는 길도 있지만 검증을 포기하는 쪽이라 쓰지 않는다.
+경고가 함께 안내하는 `uselibpqcompat=true&sslmode=require` 는 **약한 쪽 의미를 고르는 것**이라
+채택하지 않는다. 다만 운영자가 그 조합을 명시했다면 정규화는 비켜간다 — 판단을 몰래 뒤집지 않는다.
 
-> 이 값은 레포가 아니라 **Northflank 환경변수**에 있다. 코드 배포로 고쳐지지 않으므로
-> 콘솔에서 직접 바꿔야 한다. api 서비스와 마이그레이션 job 양쪽 모두 해당한다.
+> 환경변수가 아니라 코드에서 처리하는 이유: `DATABASE_URL` 은 Northflank 의 Postgres 애드온이
+> 생성해 주입하므로, 콘솔에서 고쳐도 애드온이 재생성되면 되돌아간다.
 
 ```bash
 # 1. DB 기동 (레포 루트, 호스트 포트 48291 — 로컬 5432 점유와 충돌 회피)
