@@ -2,7 +2,7 @@
 
 | 항목      | 내용                                                                                                   |
 | --------- | ------------------------------------------------------------------------------------------------------ |
-| 상태      | §2·§3 구현 완료 · §4 는 원칙만 확정, 구현은 후속                                                       |
+| 상태      | §2·§3·§4 구현 완료                                                                                     |
 | 배경      | 모바일 앱 배포 지연으로 React 웹(`apps/web`)을 추가한다. 서버는 웹이 없어 못 하는 것만 보완한다        |
 | 선행 문서 | [10-auth-db-design.md](./10-auth-db-design.md) — 토큰 전략·rotation·hard delete 정책은 그대로 공유한다 |
 | 핵심 제약 | 기존 네이티브 엔드포인트를 **깨뜨리지 않는다**. 웹 전용 경로를 따로 추가한다                           |
@@ -123,8 +123,6 @@ ambient authority(쿠키)를 새로 도입하므로 검토가 필요하다.
 
 ## 4. TourAPI 서버 프록시
 
-구현은 후속 작업이고, 여기서는 **원칙과 경계**를 확정한다.
-
 ### 4.1 왜 필요한가
 
 - `apis.data.go.kr` 은 CORS 헤더를 주지 않아 **브라우저에서 직접 호출하면 전부 실패**한다.
@@ -163,7 +161,24 @@ ambient authority(쿠키)를 새로 도입하므로 검토가 필요하다.
   OpenAPI 실시간 호출 유지" 완화책과도 어긋나지 않는다.
 - 인증을 요구한다(`@Public()` 을 붙이지 않는다) — 서비스키 쿼터를 익명 호출에 열어두지 않기 위해서다.
 
-### 4.4 원칙 문구 개정
+### 4.4 라우트
+
+```
+GET /tourism/areas
+GET /tourism/places?keyword=&limit=                 키워드 검색
+GET /tourism/places?areaCode=&sigunguCode=&limit=   지역 검색
+GET /tourism/places/:contentId
+GET /tourism/places/:contentId/images
+```
+
+`keyword` 와 `areaCode` 는 **배타적**이다 — 둘 다 오거나 둘 다 없으면 400. `/places/search` 처럼
+라우트를 나누지 않은 이유는 `:contentId` 와 선언 순서에 의존하는 모호성이 생기기 때문이고,
+단일 라우트에 XOR refine 을 걸면 그 모호성이 원천 제거된다. `limit` 은 1..50, 기본 5.
+`contentId` 는 숫자 형식만 통과한다(아니면 400).
+
+실패 매핑: 상류 오류 → 502, 타임아웃 → 504, 결과 없음(상세) → 404, 미설정 → 503.
+
+### 4.5 원칙 문구 개정
 
 [apps/api/CLAUDE.md](../apps/api/CLAUDE.md) 와 `app.module.ts` 의 금지 문구가 기존에는
 "GPS 좌표·EXIF 원본·**KTO 원천 데이터**를 수신/저장하지 않는다"였다. pass-through 프록시는 저장은
@@ -174,11 +189,12 @@ ambient authority(쿠키)를 새로 도입하므로 검토가 필요하다.
 
 ## 5. 환경 변수
 
-| 변수                      | 용도                                            | 필수         |
-| ------------------------- | ----------------------------------------------- | ------------ |
-| `KAKAO_WEB_REST_API_KEY`  | authorization code 교환용 카카오 REST API 키    | 둘이 한 묶음 |
-| `KAKAO_WEB_REDIRECT_URIS` | 쉼표 구분 redirect uri 허용목록 (http·https 만) | 둘이 한 묶음 |
-| `KAKAO_WEB_CLIENT_SECRET` | 카카오 콘솔에서 Client Secret 을 켠 경우에만    | 선택         |
+| 변수                      | 용도                                                  | 필수         |
+| ------------------------- | ----------------------------------------------------- | ------------ |
+| `KAKAO_WEB_REST_API_KEY`  | authorization code 교환용 카카오 REST API 키          | 둘이 한 묶음 |
+| `KAKAO_WEB_REDIRECT_URIS` | 쉼표 구분 redirect uri 허용목록 (http·https 만)       | 둘이 한 묶음 |
+| `KAKAO_WEB_CLIENT_SECRET` | 카카오 콘솔에서 Client Secret 을 켠 경우에만          | 선택         |
+| `KTO_SERVICE_KEY`         | TourAPI 프록시 서비스키 (비우면 `/tourism` 만 비활성) | 선택         |
 
 **REST API 키는 `KAKAO_APP_ID` 와 같은 카카오 애플리케이션의 것이어야 한다.** 다른 앱의 키를 넣으면
 교환한 토큰이 `access_token_info` 의 app_id 대조에서 걸려 **운영에서만 401** 이 난다.
@@ -191,6 +207,12 @@ ambient authority(쿠키)를 새로 도입하므로 검토가 필요하다.
 `KAKAO_WEB_*` 을 전부 비우면 `DisabledKakaoWebLoginAdapter` 가 붙어 `POST /auth/kakao/web` 만 503 이 되고
 서버는 정상 기동한다. 네이티브 `/auth/kakao` 와 쿠키 회전·로그아웃은 영향받지 않는다
 (쿠키 경로는 code 교환 port 를 타지 않는다). `test/kakao-web-disabled.e2e-spec.ts` 가 이를 고정한다.
+
+### 5.2 TourAPI 미설정 모드
+
+`KTO_SERVICE_KEY` 를 비우면 `DisabledTourApiAdapter` 가 붙어 `/tourism/*` 만 503 이 되고 서버는 정상
+기동한다. 인증(401)과 형식 검증(400)은 503 보다 먼저 걸리므로, 미설정이라는 사실이 비인증자에게
+드러나지 않는다. `test/tourism-disabled.e2e-spec.ts` 가 이를 고정한다.
 
 ## 6. 카카오 개발자 콘솔 설정 (runbook)
 
@@ -218,5 +240,6 @@ ambient authority(쿠키)를 새로 도입하므로 검토가 필요하다.
 - [ ] 스테이징에서 실제 카카오 계정 로그인 1회 (§5 — app_id 불일치는 여기서만 드러난다)
 - [ ] Vercel preview 에서 로그인 → 새로고침 → refresh 왕복 (§3.1 — 프록시 경유 쿠키는 e2e 로 재현 불가)
 - [x] KTO 데이터 취급 원칙 개정 — GPS·EXIF(수신/저장 금지)와 KTO(저장 금지) 분리 (§4.4)
-- [ ] TourAPI 프록시 구현 (§4) — 좌표 파라미터 없이
+- [x] TourAPI 프록시 구현 (§4) — 좌표 파라미터 없이
+- [ ] 스테이징에서 실제 서비스키로 `/tourism/places?keyword=` 1회 호출 (쿼터·키 형식은 여기서만 드러난다)
 - [ ] 웹 개인정보 처리방침에 "관광지 검색이 Tripic 서버를 거친다(저장하지 않음)" 반영 — 기획 담당

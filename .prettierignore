@@ -14,3 +14,7 @@ apps/api/src/generated
 #   봇은 파일 끝 개행 없이 쓰는데 pre-commit 의 *.json prettier 가 다시 넣어 pnpm-lock.yaml 과
 #   같은 왕복 churn 이 생긴다. 포맷 소유권을 Northflank 에 넘긴다.
 apps/api/northflank.json
+
+# TourAPI 지역코드 맵: 모바일의 generated JSON 에서 변환한 생성 파일이다.
+#   스크립트가 만드는 형식이라 prettier 가 다시 손대면 재생성할 때마다 diff 가 생긴다.
+apps/api/src/tourism/region-code-map.data.ts

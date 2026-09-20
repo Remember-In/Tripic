@@ -176,3 +176,21 @@ describe("envSchema — 웹 카카오 로그인", () => {
     ).toThrow();
   });
 });
+
+/** TourAPI 서버 프록시 서비스키 (docs/15 §4) */
+describe("envSchema — TourAPI 프록시", () => {
+  it("서비스키를 비우면 통과한다 — /tourism 만 꺼진 채로 기동한다", () => {
+    expect(validateEnv(validEnv()).KTO_SERVICE_KEY).toBeUndefined();
+  });
+
+  it("서비스키가 있으면 그대로 받는다", () => {
+    expect(
+      validateEnv(validEnv({ KTO_SERVICE_KEY: "kto-service-key" }))
+        .KTO_SERVICE_KEY,
+    ).toBe("kto-service-key");
+  });
+
+  it("빈 문자열은 부팅 실패 — 설정했다고 착각한 상태를 막는다", () => {
+    expect(() => validateEnv(validEnv({ KTO_SERVICE_KEY: "" }))).toThrow();
+  });
+});

@@ -267,6 +267,7 @@ erDiagram
 | `APPLE_CLIENT_ID` 외 4종                            | Apple 토큰 검증·교환·revoke, Apple 토큰 암호화 (전부 설정 또는 전부 비움 — 비우면 Apple 로그인 비활성) — [14](./14-apple-login-design.md) §7    | 사용 |
 | `KAKAO_WEB_REST_API_KEY`, `KAKAO_WEB_REDIRECT_URIS` | 웹 카카오 로그인의 authorization code 교환 (둘 다 설정 또는 둘 다 비움 — 비우면 웹 로그인만 비활성) — [15](./15-web-client-server-design.md) §2 | 사용 |
 | `KAKAO_WEB_CLIENT_SECRET`                           | 카카오 콘솔에서 Client Secret 을 켠 경우에만 — 선택                                                                                             | 사용 |
+| `KTO_SERVICE_KEY`                                   | TourAPI 서버 프록시 인증키 (비우면 `/tourism` 만 비활성) — [15](./15-web-client-server-design.md) §4                                            | 사용 |
 
 `/app-config` 응답값도 환경변수로 덮을 수 있다 (전부 선택, 기본값은 코드에 있음) —
 `KTO_DEFAULT_RADIUS_M`·`KTO_MAX_RADIUS_M`·`KTO_MAX_CANDIDATES`·`FEATURE_AI_DIARY`·
