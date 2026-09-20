@@ -10,8 +10,9 @@ import {
 } from "react-native";
 
 import {
-  TOTAL_KTO_REGION_COUNT,
+  TOTAL_TRAVEL_CITY_COUNTY_COUNT,
   collectVisitedAreaCodes,
+  collectVisitedCityCountyKeys,
   collectVisitedSigunguKeys,
 } from "@/entities/region";
 import { useCreateRecordSession } from "@/features/create-record-session";
@@ -101,6 +102,10 @@ export function HomePage() {
     () => collectVisitedSigunguKeys(sigunguProgress.data ?? []),
     [sigunguProgress.data],
   );
+  const visitedCityCountyKeys = useMemo(
+    () => collectVisitedCityCountyKeys(sigunguProgress.data ?? []),
+    [sigunguProgress.data],
+  );
   const mapDepth = currentMapDepth(mapHistory);
 
   const navigateMap = useCallback((nextDepth: TravelMapDepth) => {
@@ -177,9 +182,9 @@ export function HomePage() {
         <View style={styles.statsRow}>
           <StatCard
             highlighted
-            label="방문 시・도"
-            suffix={`/${TOTAL_KTO_REGION_COUNT}`}
-            value={visitedAreaCodes.size}
+            label="방문 시・군"
+            suffix={`/${TOTAL_TRAVEL_CITY_COUNTY_COUNT}`}
+            value={visitedCityCountyKeys.size}
           />
           <StatCard
             label="기록한 관광지"

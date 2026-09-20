@@ -13,9 +13,10 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@expo/metro-runtime": "~6.1.2",
     "@react-native-kakao/core": "^2.4.5",
     "@react-native-kakao/user": "^2.4.5",
-    "@expo/metro-runtime": "~6.1.2",
+    "@svg-maps/south-korea": "2.0.0",
     "@tanstack/react-query": "^5.90.20",
     "@tripic/shared": "workspace:*",
     "expo": "~54.0.36",

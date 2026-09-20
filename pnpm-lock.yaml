@@ -130,6 +130,9 @@ importers:
       '@react-native-kakao/user':
         specifier: ^2.4.5
         version: 2.4.6(@react-native-kakao/core@2.4.6(expo@54.0.37)(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0))(react-native@0.81.5(@babel/core@7.29.7)(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      '@svg-maps/south-korea':
+        specifier: 2.0.0
+        version: 2.0.0
       '@tanstack/react-query':
         specifier: ^5.90.20
         version: 5.102.8(react@19.1.0)
@@ -2322,6 +2325,9 @@ packages:
 
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
+
+  '@svg-maps/south-korea@2.0.0':
+    resolution: {integrity: sha512-Zs+hcVWn1V2s9ZUdgETOU81EmCyp6Nb9VULsbchvzdXjvvfta/C9cMlIQ58cd75gEWaKUutiyygUpQRESnt/RQ==}
 
   '@svgr/babel-plugin-add-jsx-attribute@8.0.0':
     resolution: {integrity: sha512-b9MIk7yhdS1pMCZM8VeNfUlSKVRhsHZNMl5O9SfaX0l0t5wjdgu4IDzGB8bpnGBBOjGST3rRFVsaaEtI4W6f7g==}
@@ -9432,6 +9438,8 @@ snapshots:
       '@sinonjs/commons': 3.0.1
 
   '@standard-schema/spec@1.1.0': {}
+
+  '@svg-maps/south-korea@2.0.0': {}
 
   '@svgr/babel-plugin-add-jsx-attribute@8.0.0(@babel/core@7.29.7)':
     dependencies:

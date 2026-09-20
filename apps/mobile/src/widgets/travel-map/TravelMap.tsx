@@ -123,21 +123,6 @@ function ProvinceArtwork({
             vectorEffect="non-scaling-stroke"
           />
         ))}
-
-        {regionStates.map(({ geometry, isVisited, region }) => (
-          <SvgText
-            fill={isVisited ? palette.gray[900] : palette.gray[600]}
-            fontSize={9}
-            fontWeight="600"
-            key={`${region.id}-label`}
-            pointerEvents="none"
-            textAnchor="middle"
-            x={geometry.labelX}
-            y={geometry.labelY}
-          >
-            {region.shortName}
-          </SvgText>
-        ))}
       </Svg>
     </View>
   );
@@ -340,10 +325,7 @@ export function TravelMap({
       `${label} 여행 지도. 방문한 시·도 ${visibleVisitedAreaCount}곳, 전체 ${KTO_REGIONS.length}곳`,
     [label, visibleVisitedAreaCount],
   );
-  const caption =
-    depth.level === "country"
-      ? `방문한 시·도 ${visibleVisitedAreaCount}/${KTO_REGIONS.length}`
-      : label;
+  const caption = depth.level === "country" ? "대한민국" : label;
   return (
     <View
       accessibilityLabel={accessibilityLabel}
@@ -424,10 +406,10 @@ const styles = StyleSheet.create({
     width: "70.11%",
   },
   provinceMapFrame: {
-    bottom: 38,
-    left: spacing.md,
+    bottom: 58,
+    left: spacing.lg,
     position: "absolute",
-    right: spacing.md,
-    top: spacing.md,
+    right: spacing.lg,
+    top: spacing.lg,
   },
 });
