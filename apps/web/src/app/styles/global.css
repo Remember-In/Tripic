@@ -149,6 +149,14 @@ button:disabled {
   border-radius: 36px;
   box-shadow: var(--shadow);
 }
+.state-actions {
+  display: grid;
+  gap: 12px;
+  margin-top: 24px;
+}
+.state-actions .secondary-button {
+  width: 100%;
+}
 .brand-mark {
   display: block;
   width: 72px;

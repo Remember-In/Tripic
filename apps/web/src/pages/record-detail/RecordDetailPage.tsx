@@ -8,6 +8,7 @@ import {
 
 import { deleteRecord, getRecord } from "@/entities/record/api/records";
 import { RecordPlacesSummary } from "@/features/record-place/ui/RecordPlacesSummary";
+import { ApiError } from "@/shared/api/http";
 import { AuthenticatedImage } from "@/shared/ui/authenticated-image/AuthenticatedImage";
 
 export function RecordDetailPage() {
@@ -34,12 +35,34 @@ export function RecordDetailPage() {
         <p className="state-card">기록을 불러오고 있어요.</p>
       </main>
     );
-  if (!record.data || record.isError)
+  if (!record.data) {
+    const message =
+      record.error instanceof ApiError
+        ? record.error.status === 404
+          ? "기록을 찾지 못했습니다."
+          : record.error.message
+        : "기록을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.";
+
     return (
       <main className="page">
-        <p className="state-card">기록을 찾지 못했습니다.</p>
+        <section className="state-card">
+          <p>{message}</p>
+          <div className="state-actions">
+            <button
+              className="primary-button"
+              type="button"
+              onClick={() => void record.refetch()}
+            >
+              다시 불러오기
+            </button>
+            <Link className="secondary-button" to="/records">
+              내 기록으로 이동
+            </Link>
+          </div>
+        </section>
       </main>
     );
+  }
 
   return (
     <main className="page detail-page">

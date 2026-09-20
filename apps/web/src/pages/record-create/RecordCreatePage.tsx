@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import {
   createRecord,
   deleteRecord,
+  getRecord,
   uploadRecordPhoto,
   upsertRecordEntry,
 } from "@/entities/record/api/records";
@@ -129,7 +130,12 @@ export function RecordCreatePage() {
           placeSyncFailed = true;
         }
       }
-      await queryClient.invalidateQueries({ queryKey: ["records"] });
+      const detail = await getRecord(record.id);
+      queryClient.setQueryData(["records", record.id], detail);
+      await queryClient.invalidateQueries({
+        exact: true,
+        queryKey: ["records"],
+      });
       if (selectedPlace && visitRegionApiEnabled()) {
         await queryClient.invalidateQueries({ queryKey: ["map-progress"] });
       }
