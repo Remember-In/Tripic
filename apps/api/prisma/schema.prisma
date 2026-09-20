@@ -19,6 +19,7 @@ datasource db {
 
 enum AuthProvider {
   KAKAO
+  APPLE
 }
 
 // 전면 hard delete 정책 (docs/10 §3, docs/11 §3): 탈퇴는 users 행 즉시 삭제 →
@@ -41,15 +42,30 @@ model User {
 model SocialAccount {
   id             String       @id @default(uuid(7))
   provider       AuthProvider
-  // Kakao user id — 카카오는 숫자지만 provider 중립적으로 문자열 저장
+  // Kakao user id(숫자) 또는 Apple sub — provider 중립적으로 문자열 저장
   providerUserId String
   userId         String
   user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt      DateTime     @default(now())
 
+  // provider 전용 자격 증명은 공통 테이블에 nullable 컬럼으로 두지 않고 분리한다 (docs/14 §5)
+  appleCredential AppleCredential?
+
   @@unique([provider, providerUserId])
   @@index([userId])
   @@map("social_accounts")
+}
+
+// Apple 계정에만 존재 — 회원탈퇴 시 Apple 토큰 revoke 에 쓰는 refresh token (docs/14 §5·§6)
+model AppleCredential {
+  socialAccountId String        @id
+  socialAccount   SocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+  // AES-256-GCM 암호문 `v1.<iv>.<authTag>.<ciphertext>` — 원문은 저장하지 않는다
+  refreshToken    String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("apple_credentials")
 }
 
 model RefreshToken {
@@ -109,6 +125,7 @@ model Record {
   updatedAt DateTime     @updatedAt
 
   entries RecordEntry[]
+  photos  RecordPhoto[]
   places  RecordPlace[]
 
   // "내 여행 기록" 최근순 조회
@@ -130,6 +147,26 @@ model RecordEntry {
 
   @@unique([recordId, date])
   @@map("record_entries")
+}
+
+// 일차별 사진 — 위치 메타데이터를 제거한 사본만 저장한다 (docs/11 §3.1).
+// 일기 없이 사진만 있는 일차가 가능하므로 entry FK 가 아니라 (recordId, date) 를 직접 갖는다.
+// PoC 단계라 bytea 로 DB 에 담고, 규모가 커지면 오브젝트 스토리지로 이관한다.
+model RecordPhoto {
+  id        String   @id @default(uuid(7))
+  recordId  String
+  record    Record   @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  // 사진이 속한 일차 (시간 없이 날짜 단위)
+  date      DateTime @db.Date
+  // EXIF·XMP·GPS 가 없는 것으로 검증된 이미지 바이트
+  data      Bytes
+  mimeType  String
+  // 사용자 총 용량 제한 집계용 (data 를 읽지 않고 합산하기 위해 별도 컬럼)
+  size      Int
+  createdAt DateTime @default(now())
+
+  @@index([recordId, date])
+  @@map("record_photos")
 }
 
 // 기록한 관광지 — 사용자가 확정한 KTO contentId만 저장.

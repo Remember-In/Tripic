@@ -1,6 +1,6 @@
 {
   "name": "@tripic/api",
-  "version": "0.0.7",
+  "version": "1.1.0",
   "description": "Tripic API (NestJS) — health/app-config/notices/version + auth/users",
   "private": true,
   "license": "UNLICENSED",
@@ -33,6 +33,7 @@
     "@tripic/shared": "workspace:*",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "sharp": "^0.35.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -42,6 +43,7 @@
     "@swc/core": "^1.15.46",
     "@testcontainers/postgresql": "^12.1.0",
     "@tripic/tsconfig": "workspace:*",
+    "@types/express": "^5.0.6",
     "@types/node": "^24.13.3",
     "pactum": "^3.9.1",
     "prisma": "^7.9.1",

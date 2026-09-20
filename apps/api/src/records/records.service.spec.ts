@@ -1,19 +1,45 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { NotFoundException } from "@nestjs/common";
+import {
+  BadRequestException,
+  NotFoundException,
+  PayloadTooLargeException,
+} from "@nestjs/common";
 import type { RecordDetail, RecordSummary } from "@tripic/shared";
-import { RecordsService } from "@/records/records.service";
+import {
+  MAX_PHOTOS_PER_RECORD,
+  MAX_PHOTO_BYTES,
+  RecordsService,
+} from "@/records/records.service";
+import {
+  ImageRejected,
+  type ImageInspector,
+  type ImageRejection,
+  type InspectedImage,
+} from "@/records/ports/image-inspector.port";
 import type {
   NewEntry,
+  NewPhoto,
   NewRecord,
+  PhotoUsage,
   RecordPatch,
   RecordsRepository,
   StoredEntry,
+  StoredPhoto,
 } from "@/records/ports/records-repository.port";
+
+interface StoredPhotoRow {
+  id: string;
+  date: string;
+  data: Buffer<ArrayBuffer>;
+  mimeType: string;
+  size: number;
+}
 
 interface StoredRecord {
   summary: RecordSummary;
   userId: string;
   entries: Map<string, StoredEntry>;
+  photos: StoredPhotoRow[];
 }
 
 /** port 계약대로 동작하는 in-memory fake (CLAUDE.md: mock 대신 fake) */
@@ -52,7 +78,12 @@ class FakeRecords implements RecordsRepository {
       createdAt: now,
       updatedAt: now,
     };
-    this.rows.set(id, { summary, userId: record.userId, entries: new Map() });
+    this.rows.set(id, {
+      summary,
+      userId: record.userId,
+      entries: new Map(),
+      photos: [],
+    });
     return summary;
   }
 
@@ -139,6 +170,73 @@ class FakeRecords implements RecordsRepository {
     const row = this.own(userId, recordId);
     return row ? row.entries.delete(date) : false;
   }
+
+  async photoUsage(
+    userId: string,
+    recordId: string,
+  ): Promise<PhotoUsage | null> {
+    const row = this.own(userId, recordId);
+    if (!row) return null;
+    const userTotalBytes = [...this.rows.values()]
+      .filter((candidate) => candidate.userId === userId)
+      .flatMap((candidate) => candidate.photos)
+      .reduce((total, photo) => total + photo.size, 0);
+    return { recordPhotoCount: row.photos.length, userTotalBytes };
+  }
+
+  async addPhoto(
+    userId: string,
+    recordId: string,
+    date: string,
+    photo: NewPhoto,
+  ): Promise<string | null> {
+    const row = this.own(userId, recordId);
+    if (!row) return null;
+    const id = `photo-${++this.seq}`;
+    row.photos.push({ id, date, ...photo });
+    return id;
+  }
+
+  async findPhoto(
+    userId: string,
+    recordId: string,
+    date: string,
+    photoId: string,
+  ): Promise<StoredPhoto | null> {
+    const row = this.own(userId, recordId);
+    const photo = row?.photos.find(
+      (candidate) => candidate.id === photoId && candidate.date === date,
+    );
+    return photo
+      ? { id: photo.id, data: photo.data, mimeType: photo.mimeType }
+      : null;
+  }
+
+  async deletePhoto(
+    userId: string,
+    recordId: string,
+    date: string,
+    photoId: string,
+  ): Promise<boolean> {
+    const row = this.own(userId, recordId);
+    if (!row) return false;
+    const index = row.photos.findIndex(
+      (candidate) => candidate.id === photoId && candidate.date === date,
+    );
+    if (index < 0) return false;
+    row.photos.splice(index, 1);
+    return true;
+  }
+}
+
+/** 통과/거부를 테스트가 정하는 검증기 fake — sharp 없이 서비스 정책만 검증한다 */
+class FakeImageInspector implements ImageInspector {
+  rejection: ImageRejection | null = null;
+
+  async inspect(): Promise<InspectedImage> {
+    if (this.rejection) throw new ImageRejected(this.rejection);
+    return { mimeType: "image/jpeg", width: 100, height: 100 };
+  }
 }
 
 const OWNER = "user-1";
@@ -146,11 +244,13 @@ const STRANGER = "user-2";
 
 describe("RecordsService", () => {
   let records: FakeRecords;
+  let images: FakeImageInspector;
   let service: RecordsService;
 
   beforeEach(() => {
     records = new FakeRecords();
-    service = new RecordsService(records);
+    images = new FakeImageInspector();
+    service = new RecordsService(records, images);
   });
 
   const createRecord = () =>
@@ -347,6 +447,118 @@ describe("RecordsService", () => {
           content: "가로채기",
           source: "USER",
         }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe("addPhoto", () => {
+    const photo = Buffer.from("이미지 바이트");
+
+    it("검증을 통과하면 저장하고 서빙 경로를 돌려준다", async () => {
+      const created = await createRecord();
+
+      const saved = await service.addPhoto(
+        OWNER,
+        created.id,
+        "2026-08-15",
+        photo,
+      );
+
+      expect(saved.id).toBeTruthy();
+      expect(saved.url).toBe(
+        `/records/${created.id}/days/2026-08-15/photos/${saved.id}`,
+      );
+    });
+
+    it("메타데이터가 남아 있으면 400 으로 거부한다", async () => {
+      const created = await createRecord();
+      images.rejection = "HAS_METADATA";
+
+      await expect(
+        service.addPhoto(OWNER, created.id, "2026-08-15", photo),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("이미지가 아니면 400", async () => {
+      const created = await createRecord();
+      images.rejection = "NOT_AN_IMAGE";
+
+      await expect(
+        service.addPhoto(OWNER, created.id, "2026-08-15", photo),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it("파일당 한도를 넘으면 413 이고 디코딩까지 가지 않는다", async () => {
+      const created = await createRecord();
+      images.rejection = "NOT_AN_IMAGE"; // 여기까지 왔다면 400 이 났을 것
+
+      await expect(
+        service.addPhoto(
+          OWNER,
+          created.id,
+          "2026-08-15",
+          Buffer.alloc(MAX_PHOTO_BYTES + 1),
+        ),
+      ).rejects.toBeInstanceOf(PayloadTooLargeException);
+    });
+
+    it("기록당 장수를 넘으면 413", async () => {
+      const created = await createRecord();
+      for (let index = 0; index < MAX_PHOTOS_PER_RECORD; index += 1) {
+        await service.addPhoto(OWNER, created.id, "2026-08-15", photo);
+      }
+
+      await expect(
+        service.addPhoto(OWNER, created.id, "2026-08-15", photo),
+      ).rejects.toBeInstanceOf(PayloadTooLargeException);
+    });
+
+    it("타인의 기록에는 올릴 수 없다 (404)", async () => {
+      const created = await createRecord();
+
+      await expect(
+        service.addPhoto(STRANGER, created.id, "2026-08-15", photo),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe("findPhoto / removePhoto", () => {
+    const photo = Buffer.from("이미지 바이트");
+
+    it("올린 사진을 다시 받아오고 지울 수 있다", async () => {
+      const created = await createRecord();
+      const saved = await service.addPhoto(
+        OWNER,
+        created.id,
+        "2026-08-15",
+        photo,
+      );
+
+      const served = await service.findPhoto(
+        OWNER,
+        created.id,
+        "2026-08-15",
+        saved.id,
+      );
+      expect(served.mimeType).toBe("image/jpeg");
+
+      await service.removePhoto(OWNER, created.id, "2026-08-15", saved.id);
+      await expect(
+        service.findPhoto(OWNER, created.id, "2026-08-15", saved.id),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it("타인은 남의 사진을 받아갈 수 없다 (404)", async () => {
+      const created = await createRecord();
+      const saved = await service.addPhoto(
+        OWNER,
+        created.id,
+        "2026-08-15",
+        photo,
+      );
+
+      await expect(
+        service.findPhoto(STRANGER, created.id, "2026-08-15", saved.id),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });

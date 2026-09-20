@@ -108,21 +108,25 @@ Tripic 서버에 업로드·저장하지 않는다. P0 서버는 앱 설정·공
 
 서버가 수신하지 않는 데이터: GPS 좌표, EXIF 포함 원본 사진, 실시간 위치 정보, KTO 원천 데이터.
 방문 관광지의 `contentId`·지역코드는 사용자가 능동적으로 확정한 뒤, 위치정보지원센터 사전 검토를
-통과한 경우에만 서버 API를 노출한다. 관광지명·주소·소개·이미지 등 KTO 원천 데이터는 저장하지
-않는다. AI 일기 생성 요청의 관광지명·메모는 저장 없이 일시 처리하는 예외가 있다
-([11-records-api-design.md](./11-records-api-design.md) §3.2).
+통과한 경우에만 서버 API를 노출한다. 관광지명·주소·소개·이미지 등 KTO 원천 데이터는 저장하지도,
+수신하지도 않는다 — 예외 없음 (AI 일기 생성의 일시 처리 예외는 해당 기능 미도입 결정과 함께
+폐기됐다, [11-records-api-design.md](./11-records-api-design.md) §3.2).
 
 ### 14.3 P1 인증·기록 API
 
-| API                | 역할                                      |
-| ------------------ | ----------------------------------------- |
-| POST /auth/kakao   | 카카오 토큰 검증 후 Tripic 세션 발급      |
-| POST /auth/refresh | refresh token rotation                    |
-| POST /auth/logout  | refresh token family 폐기                 |
-| GET /users/me      | 내 프로필 조회                             |
-| PATCH /users/me    | 닉네임 수정                                |
-| /records 계열      | 사용자 확정 기록 콘텐츠 API(설계·구현 중) |
+| API                            | 역할                                                       |
+| ------------------------------ | ---------------------------------------------------------- |
+| POST /auth/kakao               | 카카오 토큰 검증 후 Tripic 세션 발급                       |
+| POST /auth/apple               | Apple identity token 검증·code 교환 후 Tripic 세션 발급    |
+| POST /auth/apple/notifications | Apple 계정 상태 알림(연결 해제·계정 삭제) 수신             |
+| POST /auth/refresh             | refresh token rotation                                     |
+| POST /auth/logout              | refresh token family 폐기                                  |
+| GET /users/me                  | 내 프로필 조회                                             |
+| PATCH /users/me                | 닉네임 수정                                                |
+| DELETE /users/me               | 회원탈퇴 — Apple 토큰 revoke 후 즉시 hard delete (cascade) |
+| /records 계열                  | 사용자 확정 기록 콘텐츠 + 일차별 일기·사진 API (구현 완료) |
 
-인증·사용자 API의 현재 계약은 [10-auth-db-design.md](./10-auth-db-design.md), 기록 API와 사진·AI
-처리 예외는 [11-records-api-design.md](./11-records-api-design.md)를 따른다. `record_places` API는
+인증·사용자 API의 현재 계약은 [10-auth-db-design.md](./10-auth-db-design.md)(Apple 로그인은
+[14-apple-login-design.md](./14-apple-login-design.md)), 기록·사진 API는
+[11-records-api-design.md](./11-records-api-design.md)를 따른다. `record_places` API는
 [12-location-law.md](./12-location-law.md)의 사전 검토 게이트를 통과하기 전까지 노출하지 않는다.

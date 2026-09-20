@@ -160,7 +160,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # 알려진 advisory는 package.json > pnpm.overrides 의 range-scoped 패치 강제로 해결한다
-      # (brace-expansion 1.1.18/5.0.9, fast-uri, js-yaml, nanoid).
+      # (brace-expansion 1.1.18/5.0.9, fast-uri, js-yaml, nanoid, multer — @nestjs/platform-express 가 2.2.0 고정).
       # 패치 불가능한 advisory가 다시 생기면 pnpm.auditConfig.ignoreGhsas 에 근거 주석과 함께 추가할 것.
       - name: Audit dependencies
         run: pnpm audit --audit-level=high

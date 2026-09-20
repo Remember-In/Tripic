@@ -10,9 +10,19 @@ export class PrismaUsersAdapter implements UsersRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async findById(userId: string): Promise<UserProfile | null> {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (!user) return null;
-    return { id: user.id, nickname: user.nickname, createdAt: user.createdAt };
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { socialAccounts: { select: { provider: true }, take: 1 } },
+    });
+    // 사용자는 항상 소셜 계정과 함께 생성된다 — 없으면 유효한 계정이 아니다
+    const provider = user?.socialAccounts[0]?.provider;
+    if (!user || !provider) return null;
+    return {
+      id: user.id,
+      nickname: user.nickname,
+      provider,
+      createdAt: user.createdAt,
+    };
   }
 
   async updateNickname(

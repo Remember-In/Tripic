@@ -1,8 +1,12 @@
+import type { AuthProvider } from "@tripic/shared";
+
 export const USERS_REPOSITORY = Symbol("UsersRepository");
 
 export interface UserProfile {
   id: string;
   nickname: string | null;
+  /** 가입에 사용한 로그인 수단 — 계정 연결을 지원하지 않아 사용자당 하나다 */
+  provider: AuthProvider;
   createdAt: Date;
 }
 

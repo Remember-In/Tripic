@@ -4,7 +4,7 @@
 | ---- | ----------------------------------------------------------------------------------- |
 | 상태 | **구현 완료** — 3종 모두 이 계약대로 정적 서빙 중 (`src/<module>/<module>.data.ts`) |
 | 근거 | PRD 14.2 (비위치성 운영 API), [06-architecture.md](./06-architecture.md)            |
-| 원칙 | **DB 불필요** — 서버 코드 내 정적 JSON/상수로 서빙 (원격 갱신 = 재배포)             |
+| 원칙 | **DB 불필요** — 코드 상수로 서빙하되 app-config 값은 환경변수로 덮을 수 있다        |
 
 ---
 
@@ -50,14 +50,42 @@ PRD 6.4의 후보 조회 기준을 릴리스 없이 조정할 수 있게 원격�
     "maxCandidates": 5, // 후보 최대 노출 수
   },
   "features": {
-    "aiDiary": false, // AI 일기 생성 노출 여부 — 신고·필터 구현 전까지 false (docs/11 §3.2)
-    "photoUpload": false, // 사진 업로드 노출 여부 — 업로드 API 구현 전까지 false (docs/11 §3.1)
+    "aiDiary": false, // AI 일기 생성 — 비용을 이유로 구현하지 않기로 결정 (docs/11 §3.2)
+    "photoUpload": true, // 사진 업로드 — 업로드·서빙·삭제 API 구현 완료 (docs/11 §3.1)
+    "appleLogin": true, // Apple 로그인 — Apple env 5종 설정 여부로 결정 (docs/14 §7.1)
   },
 }
 ```
 
 기능 플래그는 **해당 서버 API 가 실제로 존재할 때** `true` 로 뒤집는다 — 없는 엔드포인트를 앱이
-노출하지 않게 막는 것이 이 스위치의 목적이므로 둘 다 `false` 로 출시한다.
+노출하지 않게 막는 것이 이 스위치의 목적이다. 앱이 아직 그 API 를 쓰지 않더라도, 붙이는 시점에
+서버를 다시 배포하지 않도록 API 존재 여부만 반영한다.
+
+`appleLogin` 은 환경변수 플래그가 아니라 **Apple 설정(env 5종)이 있는지로 결정**된다 — 키 없이 켜면
+`/auth/apple` 이 `503` 을 주는 버튼이 앱에 노출되므로 따로 켜고 끌 수 없게 했다
+([14-apple-login-design.md](./14-apple-login-design.md) §7.1).
+
+`aiDiary` 는 뒤집힐 일이 없다 — AI 일기 생성은 **구현하지 않기로 결정**했다
+([11-records-api-design.md](./11-records-api-design.md) §3.2). 앱이 이미 읽고 있는 필드라
+계약에서 빼지 않고 상시 `false` 로 둔다.
+
+**환경변수로 덮을 수 있다** — 위 다섯 값은 코드에 기본값을 두되 환경변수가 있으면 그쪽을 쓴다.
+반경을 조정할 때 코드 수정·태그·재배포 대신 값만 바꾸고 재시작하면 된다.
+
+| 환경변수               | 기본값  |
+| ---------------------- | ------- |
+| `KTO_DEFAULT_RADIUS_M` | `300`   |
+| `KTO_MAX_RADIUS_M`     | `1000`  |
+| `KTO_MAX_CANDIDATES`   | `5`     |
+| `FEATURE_AI_DIARY`     | `false` |
+| `FEATURE_PHOTO_UPLOAD` | `true`  |
+
+잘못된 값은 **부팅 시점에 막는다** — 운영 중 이상한 설정이 앱으로 흘러가지 않도록
+`ConfigModule.validate` 에서 검증한다.
+
+- 반경·후보 수: 양의 정수만 (`0`, 음수, 소수, `300m` 같은 단위 표기는 거부)
+- 플래그: **`true` / `false` 만** — `on`·`yes`·`1`·`True` 는 모두 거부한다.
+  여러 표기를 받아주면 배포마다 표기가 갈리고 값을 읽는 쪽이 매번 해석해야 하므로 하나로 고정했다.
 
 ### GET /notices — 공지 목록
 
@@ -83,9 +111,8 @@ PRD 6.4의 후보 조회 기준을 릴리스 없이 조정할 수 있게 원격�
   출시 전 페이지가 **전체 공개·지역 제한 없음·방문자 수정 불가** 상태인지 확인한다.
 
 처리방침 본문에는 [12-location-law.md](./12-location-law.md) §2-3과 사진 선택 동의
-([11-records-api-design.md](./11-records-api-design.md) §3.1), 그리고 **AI 일기 생성 시
-관광지명·메모의 LLM(제3자) 제공** — 제공자·목적·보관 정책 포함
-([11-records-api-design.md](./11-records-api-design.md) §3.2)을 반영한다.
+([11-records-api-design.md](./11-records-api-design.md) §3.1)를 반영한다.
+AI 일기 생성을 도입하지 않기로 했으므로(같은 문서 §3.2) **LLM(제3자) 제공 고지는 적지 않는다.**
 
 **설정 화면(Figma 46:1245) 대조**:
 
@@ -110,5 +137,5 @@ PRD 6.4의 후보 조회 기준을 릴리스 없이 조정할 수 있게 원격�
 - 스토어 URL 등 미확정 값은 빈 문자열이 아니라 **필드 생략(optional)** 으로 둔다 — 현재
   `/version` 응답에 `updateUrl`이 없다.
 - `app-config`의 `kto` 기본값은 앱과 공유하는 상수(`DEFAULT_RADIUS_M`·`EXPANDED_RADIUS_M`·
-  `MAX_CANDIDATES`)를 그대로 쓴다 — 원격 조정이 필요하면 `app-config.data.ts` 값만 바꿔 재배포한다.
+  `MAX_CANDIDATES`)와 같은 값을 env 스키마의 기본값으로 두고, 환경변수가 있으면 그쪽을 쓴다.
 - 공지 배열은 데이터 모듈에서 `publishedAt` 내림차순 정렬을 보장한다 (컨트롤러는 정렬하지 않음).

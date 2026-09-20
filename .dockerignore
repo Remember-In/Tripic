@@ -1,3 +1,7 @@
+# 모바일 앱은 api 이미지와 무관하다. 빌드 컨텍스트에 넣으면 폰트·에셋으로 컨텍스트가 커지고,
+# apps/mobile/package.json 이 들어오는 순간 워크스페이스 재설치가 expo 의존성까지 받으려 한다.
+apps/mobile
+
 **/node_modules
 **/dist
 **/build

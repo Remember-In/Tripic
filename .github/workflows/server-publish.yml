@@ -1,7 +1,7 @@
 name: Server Publish
 
 # v* 태그 하나로 릴리스 전체가 진행된다:
-#   publish → api / migrator 이미지를 GHCR 에 push (태그가 아닌 digest 로 고정)
+#   publish → api / migrator 이미지를 GHCR 에 push (버전 태그로 참조 — 아래 job outputs 주석 참고)
 #   release → Northflank 템플릿(apps/api/northflank.json)을 실행하고 결과까지 대기
 #
 # 마이그레이션 → 배포 순서는 GitHub 이 아니라 템플릿 안에서 보장된다:

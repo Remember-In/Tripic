@@ -43,4 +43,7 @@ NestJS 모듈 = bounded context. 모듈 내부 구조:
 
 - GPS 좌표·EXIF 원본·KTO 원천 데이터를 수신/저장하는 코드를 만들지 않는다.
 - 방문 관광지(record_places) API는 위치정보지원센터 사전 검토 전까지 노출하지 않는다.
-  기록 콘텐츠(제목·일기·해시태그) API는 검토 대상이 아니다 — docs/11-records-api-design.md 참고.
+  기록 콘텐츠(제목·일기·해시태그)와 EXIF 제거 사진 API는 검토 대상이 아니며 이미 구현돼 있다 —
+  docs/11-records-api-design.md 참고.
+- AI 일기 생성은 구현하지 않기로 결정했다 (docs/11 §3.2). `features.aiDiary` 는 상시 `false` 이고,
+  서버가 LLM 을 호출하거나 관광지명·메모를 수신하는 코드를 만들지 않는다.

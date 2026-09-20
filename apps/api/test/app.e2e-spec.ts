@@ -27,4 +27,19 @@ describe("API (e2e)", () => {
   it("GET /health → 200 { status: ok }", async () => {
     await spec().get("/health").expectStatus(200).expectJson({ status: "ok" });
   });
+
+  it("Bearer 없이도 통과한다 — 플랫폼 probe 가 인증 없이 호출한다", async () => {
+    // Northflank 의 liveness/readiness probe 경로다 (docs/10 §8)
+    await spec().get("/health").expectStatus(200);
+    await spec().get("/health").withBearerToken("garbage").expectStatus(200);
+  });
+
+  it("없는 경로는 404 로 답한다", async () => {
+    await spec().get("/nope").expectStatus(404);
+  });
+
+  it("인증이 필요한 경로는 Bearer 없이 401 이다 (전역 default-deny)", async () => {
+    await spec().get("/users/me").expectStatus(401);
+    await spec().get("/records").expectStatus(401);
+  });
 });
