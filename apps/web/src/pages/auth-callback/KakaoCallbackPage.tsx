@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import {
@@ -14,8 +14,14 @@ export function KakaoCallbackPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [error, setError] = useState<string | null>(null);
+  const callbackHandled = useRef(false);
 
   useEffect(() => {
+    // React StrictMode는 개발 환경에서 effect를 두 번 실행한다. OAuth code는
+    // 일회용이므로 동일 콜백을 두 번 검증하거나 서버로 전송하지 않는다.
+    if (callbackHandled.current) return;
+    callbackHandled.current = true;
+
     const code = params.get("code");
     const state = params.get("state");
     const expectedState = sessionStorage.getItem(KAKAO_STATE_KEY);
@@ -26,9 +32,9 @@ export function KakaoCallbackPage() {
       return;
     }
 
-    const { redirectUri, restApiKey } = kakaoLoginConfig();
+    const { redirectUri } = kakaoLoginConfig();
     void requestJson<WebLoginResult>("/auth/kakao/web", {
-      body: JSON.stringify({ code, redirectUri, restApiKey }),
+      body: JSON.stringify({ code, redirectUri }),
       method: "POST",
     })
       .then((result) => {

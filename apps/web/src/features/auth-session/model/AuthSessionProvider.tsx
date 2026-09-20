@@ -19,6 +19,7 @@ import {
 type AuthStatus = "loading" | "authenticated" | "anonymous";
 
 type AuthSessionContextValue = {
+  clearSession: () => void;
   completeLogin: (result: WebLoginResult) => void;
   logout: () => Promise<void>;
   status: AuthStatus;
@@ -107,8 +108,14 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   }, [becomeAnonymous]);
 
   const value = useMemo(
-    () => ({ completeLogin, logout, status, user }),
-    [completeLogin, logout, status, user],
+    () => ({
+      clearSession: becomeAnonymous,
+      completeLogin,
+      logout,
+      status,
+      user,
+    }),
+    [becomeAnonymous, completeLogin, logout, status, user],
   );
 
   return (

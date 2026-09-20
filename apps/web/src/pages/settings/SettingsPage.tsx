@@ -6,7 +6,7 @@ import { useAuthSession } from "@/features/auth-session/model/AuthSessionProvide
 import { requestJson } from "@/shared/api/http";
 
 export function SettingsPage() {
-  const { logout, user } = useAuthSession();
+  const { clearSession, logout, user } = useAuthSession();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const clear = useMutation({
@@ -18,12 +18,11 @@ export function SettingsPage() {
   const withdraw = useMutation({
     mutationFn: () =>
       requestJson<void>("/users/me", { auth: true, method: "DELETE" }),
-    onSuccess: async () => {
-      try {
-        await logout();
-      } finally {
-        navigate("/login", { replace: true });
-      }
+    onSuccess: () => {
+      // 탈퇴 직후 access token은 이미 무효라 logout API가 401일 수 있다.
+      // 서버는 계정·refresh token을 cascade 삭제하므로 클라이언트 세션만 즉시 비운다.
+      clearSession();
+      navigate("/login", { replace: true });
     },
   });
 

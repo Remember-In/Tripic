@@ -115,6 +115,21 @@ const webLogin = async (id: string) => {
   return requireCookie(headers);
 };
 
+const webSession = async (id: string) => {
+  const [body, headers] = bodyAndHeaders(
+    await spec()
+      .post("/auth/kakao/web")
+      .withJson({ code: `web-code-${id}`, redirectUri: REDIRECT_URI })
+      .expectStatus(201)
+      .returns("res.body")
+      .returns("res.headers"),
+  );
+  return {
+    cookie: requireCookie(headers),
+    session: webSocialLoginResultSchema.parse(body),
+  };
+};
+
 describe("웹 인증 (e2e)", () => {
   let app: INestApplication;
 
@@ -344,6 +359,28 @@ describe("웹 인증 (e2e)", () => {
         .post("/auth/refresh/web")
         .withCookies(REFRESH_COOKIE_NAME, victim.value)
         .expectStatus(200);
+    });
+  });
+
+  describe("웹 회원탈퇴와 재가입", () => {
+    it("탈퇴하면 세션이 무효화되고 같은 카카오 계정은 새 사용자로 재가입한다", async () => {
+      const before = await webSession("web-withdraw-rejoin");
+
+      await spec()
+        .delete("/users/me")
+        .withBearerToken(before.session.accessToken)
+        .expectStatus(204);
+
+      const refreshHeaders: unknown = await spec()
+        .post("/auth/refresh/web")
+        .withCookies(REFRESH_COOKIE_NAME, before.cookie.value)
+        .expectStatus(401)
+        .returns("res.headers");
+      expect(isDeletion(requireCookie(refreshHeaders))).toBe(true);
+
+      const after = await webSession("web-withdraw-rejoin");
+      expect(after.session.isNewUser).toBe(true);
+      expect(after.session.user.id).not.toBe(before.session.user.id);
     });
   });
 
