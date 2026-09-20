@@ -52,3 +52,15 @@ export async function searchTouristPlaces(keyword: string) {
     { auth: true },
   );
 }
+
+export function getTouristPlace(contentId: string) {
+  if (isPreview()) {
+    return Promise.resolve(
+      PREVIEW_PLACES.find((place) => place.contentId === contentId) ?? null,
+    );
+  }
+
+  return requestJson<TouristPlace>(`/tourism/places/${contentId}`, {
+    auth: true,
+  });
+}

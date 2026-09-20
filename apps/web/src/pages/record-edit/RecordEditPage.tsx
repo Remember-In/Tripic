@@ -9,6 +9,7 @@ import {
   updateRecord,
   upsertRecordEntry,
 } from "@/entities/record/api/records";
+import { RecordPlacesEditor } from "@/features/record-place/ui/RecordPlacesEditor";
 
 function parseHashtags(value: string) {
   return value
@@ -108,6 +109,8 @@ function RecordEditForm({ record }: { record: RecordDetail }) {
           </label>
         </section>
       ))}
+
+      <RecordPlacesEditor recordId={record.id} />
 
       {save.isError ? (
         <p className="form-error compose-error" role="alert">

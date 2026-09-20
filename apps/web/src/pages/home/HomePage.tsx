@@ -1,13 +1,29 @@
-import type { RegionProgress } from "@tripic/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
+import {
+  getMapProgress,
+  type MapRegionProgress,
+} from "@/entities/record-place/api/recordPlaces";
 import { listRecords } from "@/entities/record/api/records";
+import { visitRegionApiEnabled } from "@/shared/config/env";
 import { TravelMap } from "@/widgets/travel-map/TravelMap";
 
-const PREVIEW_REGION_PROGRESS: RegionProgress[] = [
-  { areaCode: "1", id: "preview-seoul", visitCount: 1 },
-  { areaCode: "6", id: "preview-busan", visitCount: 1 },
+const PREVIEW_REGION_PROGRESS: MapRegionProgress[] = [
+  {
+    areaCode: "1",
+    firstVisitedAt: "2026-09-01T00:00:00.000Z",
+    id: "preview-seoul",
+    lastVisitedAt: "2026-09-01T00:00:00.000Z",
+    visitCount: 1,
+  },
+  {
+    areaCode: "6",
+    firstVisitedAt: "2026-09-02T00:00:00.000Z",
+    id: "preview-busan",
+    lastVisitedAt: "2026-09-02T00:00:00.000Z",
+    visitCount: 1,
+  },
 ];
 
 function previewEnabled() {
@@ -17,9 +33,18 @@ function previewEnabled() {
 }
 
 export function HomePage() {
+  const isPreview = previewEnabled();
+  const regionApiEnabled = visitRegionApiEnabled();
   const records = useQuery({ queryKey: ["records"], queryFn: listRecords });
-  // 방문 지역 API가 추가되면 빈 배열 대신 조회 결과만 주입하면 된다.
-  const regionProgress = previewEnabled() ? PREVIEW_REGION_PROGRESS : [];
+  const progress = useQuery({
+    enabled: !isPreview && regionApiEnabled,
+    queryFn: getMapProgress,
+    queryKey: ["map-progress"],
+    retry: false,
+  });
+  const regionProgress = isPreview
+    ? PREVIEW_REGION_PROGRESS
+    : (progress.data?.regions ?? []);
   const visitedAreaCodes = new Set(
     regionProgress
       .filter((region) => region.visitCount > 0)
@@ -51,19 +76,34 @@ export function HomePage() {
       <aside className="dashboard-panel">
         <div className="stat-grid">
           <article className="stat-card">
-            <strong>{records.data?.length ?? 0}</strong>
-            <span>여행 기록</span>
+            <strong>
+              {isPreview
+                ? 2
+                : regionApiEnabled
+                  ? (progress.data?.recordedPlaceCount ?? 0)
+                  : (records.data?.length ?? 0)}
+            </strong>
+            <span>
+              {regionApiEnabled || isPreview ? "기록한 관광지" : "여행 기록"}
+            </span>
           </article>
           <article className="stat-card">
-            <strong>{visitedAreaCodes.size}</strong>
+            <strong>
+              {isPreview
+                ? visitedAreaCodes.size
+                : (progress.data?.visitedAreaCount ?? 0)}
+            </strong>
             <span>방문 지역</span>
           </article>
         </div>
         <div className="notice-card">
-          <strong>스탬프 기록 준비 중</strong>
+          <strong>
+            {progress.isError ? "스탬프를 불러오지 못했어요" : "지도 스탬프"}
+          </strong>
           <p>
-            관광지를 키워드로 검색해 확정하면 시·도와 시·군·구 스탬프를 남길 수
-            있어요.
+            {regionApiEnabled || isPreview
+              ? "키워드로 확정한 관광지의 시·도 스탬프가 지도에 표시됩니다."
+              : "클라이언트 연결은 준비되었습니다. 서버 API 배포 후 스탬프가 활성화됩니다."}
           </p>
         </div>
         <Link className="primary-button" to="/records/new">

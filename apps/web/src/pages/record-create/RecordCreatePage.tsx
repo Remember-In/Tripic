@@ -8,10 +8,12 @@ import {
   uploadRecordPhoto,
   upsertRecordEntry,
 } from "@/entities/record/api/records";
+import { createRecordPlace } from "@/entities/record-place/api/recordPlaces";
 import {
   searchTouristPlaces,
   type TouristPlace,
 } from "@/entities/tourist-place/api/searchTouristPlaces";
+import { visitRegionApiEnabled } from "@/shared/config/env";
 import { preparePhoto } from "@/shared/lib/image/preparePhoto";
 
 function today() {
@@ -94,8 +96,24 @@ export function RecordCreatePage() {
       for (const file of files) {
         await uploadRecordPhoto(record.id, date, await preparePhoto(file));
       }
+      let placeSyncFailed = false;
+      if (selectedPlace && visitRegionApiEnabled()) {
+        try {
+          await createRecordPlace(record.id, {
+            contentId: selectedPlace.contentId,
+            visitedAt: `${date}T00:00:00.000Z`,
+          });
+        } catch {
+          placeSyncFailed = true;
+        }
+      }
       await queryClient.invalidateQueries({ queryKey: ["records"] });
-      navigate(`/records/${record.id}`);
+      if (selectedPlace && visitRegionApiEnabled()) {
+        await queryClient.invalidateQueries({ queryKey: ["map-progress"] });
+      }
+      navigate(
+        `/records/${record.id}${placeSyncFailed ? "?placeSync=failed" : ""}`,
+      );
     } catch (reason) {
       let cleanupFailed = false;
       if (createdRecordId) {
@@ -256,8 +274,9 @@ export function RecordCreatePage() {
             <p className="selected-place">선택됨 · {selectedPlace.title}</p>
           ) : null}
           <p className="integration-note">
-            관광지를 선택하지 않아도 기록을 저장할 수 있습니다. 선택한 장소의
-            방문 지역 스탬프 반영은 방문 기록 API 연결 후 활성화됩니다.
+            {visitRegionApiEnabled()
+              ? "관광지를 선택하면 저장 후 방문 지역 스탬프에 반영됩니다."
+              : "관광지를 선택하지 않아도 기록을 저장할 수 있습니다. 서버 API 배포 후 선택한 장소의 스탬프 반영이 활성화됩니다."}
           </p>
         </section>
 

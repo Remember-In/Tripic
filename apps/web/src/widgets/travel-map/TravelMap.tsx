@@ -13,7 +13,7 @@ const REGIONS = {
   gwangju: { areaCode: "5", label: "광주", x: 139, y: 407 },
   gyeonggi: { areaCode: "31", label: "경기", x: 163, y: 154 },
   incheon: { areaCode: "2", label: "인천", x: 93, y: 163 },
-  jeju: { areaCode: "39", label: "제주", x: 197, y: 574 },
+  jeju: { areaCode: "39", label: "제주", x: 112, y: 613 },
   "north-chungcheong": { areaCode: "33", label: "충북", x: 241, y: 242 },
   "north-gyeongsang": { areaCode: "35", label: "경북", x: 323, y: 282 },
   "north-jeolla": { areaCode: "37", label: "전북", x: 177, y: 348 },
@@ -34,6 +34,7 @@ export function TravelMap({ visitedAreaCodes = new Set() }: TravelMapProps) {
     <svg
       aria-label="대한민국 17개 시·도 방문 지도"
       className="korea-map"
+      focusable="false"
       preserveAspectRatio="xMidYMid meet"
       role="img"
       viewBox={southKoreaMap.viewBox}

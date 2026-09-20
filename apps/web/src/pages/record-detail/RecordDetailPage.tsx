@@ -1,11 +1,18 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  Link,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 
 import { deleteRecord, getRecord } from "@/entities/record/api/records";
+import { RecordPlacesSummary } from "@/features/record-place/ui/RecordPlacesSummary";
 import { AuthenticatedImage } from "@/shared/ui/authenticated-image/AuthenticatedImage";
 
 export function RecordDetailPage() {
   const { recordId } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const record = useQuery({
@@ -64,6 +71,15 @@ export function RecordDetailPage() {
           </p>
         ) : null}
       </div>
+
+      {searchParams.get("placeSync") === "failed" ? (
+        <p className="integration-note detail-notice" role="status">
+          여행 기록은 저장됐지만 관광지는 반영하지 못했습니다. 기록 수정에서
+          다시 추가해 주세요.
+        </p>
+      ) : null}
+
+      <RecordPlacesSummary recordId={record.data.id} />
 
       <div className="day-list">
         {record.data.days.map((day, index) => (
