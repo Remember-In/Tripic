@@ -11,6 +11,7 @@ import type {
   StoredEntry,
   StoredPhoto,
 } from "@/records/ports/records-repository.port";
+import { recordPhotoUrl } from "@/records/record-photo-url";
 import type { Prisma, Record as RecordRow } from "@/generated/prisma/client";
 
 /** `YYYY-MM-DD` ↔ Postgres date(UTC 자정) 변환 */
@@ -26,10 +27,6 @@ interface PhotoRow {
   id: string;
   date: Date;
 }
-
-/** 사진 바이너리 서빙 경로 — 상세와 요약이 같은 규칙을 쓰도록 한 곳에 둔다 */
-const photoUrl = (recordId: string, day: string, photoId: string) =>
-  `/records/${recordId}/days/${day}/photos/${photoId}`;
 
 /**
  * 요약 계산에 필요한 날짜와 대표 사진 id 만 읽는다 — 사진 바이트(bytea)는 절대 싣지 않는다.
@@ -118,7 +115,7 @@ export class PrismaRecordsAdapter implements RecordsRepository {
       const day = dayOf(photo.date);
       day.photos.push({
         id: photo.id,
-        url: photoUrl(row.id, day.date, photo.id),
+        url: recordPhotoUrl(row.id, day.date, photo.id),
       });
     }
 
@@ -324,7 +321,10 @@ export class PrismaRecordsAdapter implements RecordsRepository {
       startDate: days.at(0) ?? null,
       endDate: days.at(-1) ?? null,
       coverPhoto: cover
-        ? { id: cover.id, url: photoUrl(row.id, toDay(cover.date), cover.id) }
+        ? {
+            id: cover.id,
+            url: recordPhotoUrl(row.id, toDay(cover.date), cover.id),
+          }
         : null,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
