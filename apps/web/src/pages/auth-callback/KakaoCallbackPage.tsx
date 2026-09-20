@@ -39,7 +39,12 @@ export function KakaoCallbackPage() {
     })
       .then((result) => {
         completeLogin(result);
-        navigate("/", { replace: true });
+        navigate(
+          result.isNewUser || !result.user.nickname ? "/onboarding" : "/",
+          {
+            replace: true,
+          },
+        );
       })
       .catch((callbackError: unknown) => {
         setError(

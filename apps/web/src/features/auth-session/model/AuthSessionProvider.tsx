@@ -23,6 +23,7 @@ type AuthSessionContextValue = {
   completeLogin: (result: WebLoginResult) => void;
   logout: () => Promise<void>;
   status: AuthStatus;
+  updateUser: (user: AuthUser) => void;
   user: AuthUser | null;
 };
 
@@ -67,6 +68,11 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     setStatus("anonymous");
   }, [queryClient]);
 
+  const clearSession = useCallback(() => {
+    setAccessToken(null);
+    becomeAnonymous();
+  }, [becomeAnonymous]);
+
   const loadProfile = useCallback(async () => {
     const profile = await requestJson<Me>("/users/me", { auth: true });
     setUser({ id: profile.id, nickname: profile.nickname });
@@ -102,20 +108,20 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
         method: "POST",
       });
     } finally {
-      setAccessToken(null);
-      becomeAnonymous();
+      clearSession();
     }
-  }, [becomeAnonymous]);
+  }, [clearSession]);
 
   const value = useMemo(
     () => ({
-      clearSession: becomeAnonymous,
+      clearSession,
       completeLogin,
       logout,
       status,
+      updateUser: setUser,
       user,
     }),
-    [becomeAnonymous, completeLogin, logout, status, user],
+    [clearSession, completeLogin, logout, status, user],
   );
 
   return (

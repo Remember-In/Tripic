@@ -36,8 +36,9 @@ export function SettingsPage() {
       </div>
       <section className="settings-card">
         <p className="setting-label">로그인 계정</p>
-        <strong>{user?.nickname || "Tripic 사용자"}</strong>
+        <strong>{user?.nickname}</strong>
         <span>카카오 계정으로 로그인됨</span>
+        <small className="account-id">사용자 ID {user?.id}</small>
         <button
           className="secondary-button"
           type="button"

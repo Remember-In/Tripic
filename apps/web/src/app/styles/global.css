@@ -167,6 +167,65 @@ button:disabled {
   font-size: 62px;
   letter-spacing: -4px;
 }
+.onboarding-card h1 {
+  font-size: clamp(38px, 8vw, 52px);
+  letter-spacing: -2.5px;
+}
+.onboarding-form {
+  display: grid;
+  gap: 18px;
+  text-align: left;
+}
+.onboarding-form > label:not(.agreement-row) {
+  display: grid;
+  gap: 8px;
+  color: #646464;
+  font-size: 13px;
+  font-weight: 800;
+}
+.onboarding-form input[type="text"] {
+  width: 100%;
+  min-height: 52px;
+  padding: 0 16px;
+  color: #151515;
+  background: #f7f7f4;
+  border: 1px solid transparent;
+  border-radius: 15px;
+  outline: 0;
+}
+.onboarding-form input[type="text"]:focus {
+  background: white;
+  border-color: var(--accent-strong);
+  box-shadow: 0 0 0 3px rgb(155 210 60 / 18%);
+}
+.agreement-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 10px;
+  color: #777;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.agreement-row input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--accent-strong);
+}
+.agreement-row a {
+  color: #5f7f2c;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.onboarding-cancel {
+  margin-top: 18px;
+  padding: 10px;
+  color: #888;
+  background: transparent;
+  font-weight: 700;
+}
 .login-description {
   margin: 18px auto 34px;
   color: #696969;
@@ -601,6 +660,13 @@ button:disabled {
 .settings-card span,
 .setting-label {
   color: var(--muted);
+}
+.account-id {
+  overflow: hidden;
+  color: #a0a0a0;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .setting-label {
   margin: 0;

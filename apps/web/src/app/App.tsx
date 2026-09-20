@@ -5,6 +5,7 @@ import { ProtectedRoute } from "@/features/auth-session/ui/ProtectedRoute";
 import { KakaoCallbackPage } from "@/pages/auth-callback/KakaoCallbackPage";
 import { HomePage } from "@/pages/home/HomePage";
 import { LoginPage } from "@/pages/login/LoginPage";
+import { OnboardingPage } from "@/pages/onboarding/OnboardingPage";
 import { PrivacyPolicyPage, TermsPage } from "@/pages/policy/PolicyPage";
 import { RecordDetailPage } from "@/pages/record-detail/RecordDetailPage";
 import { RecordEditPage } from "@/pages/record-edit/RecordEditPage";
@@ -22,6 +23,7 @@ export function App() {
         <Route path="/privacy" element={<PrivacyPolicyPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route element={<ProtectedRoute />}>
+          <Route path="onboarding" element={<OnboardingPage />} />
           <Route element={<AppShell />}>
             <Route index element={<HomePage />} />
             <Route path="records" element={<RecordsPage />} />
