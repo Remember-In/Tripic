@@ -157,6 +157,9 @@ class FakeAppleApi implements AppleAuthClient {
 }
 
 const unusedKakao: KakaoVerifier = {
+  async exchangeAuthorizationCode() {
+    throw new Error("카카오는 이 테스트에서 쓰지 않는다");
+  },
   async verifyAccessToken() {
     throw new Error("카카오는 이 테스트에서 쓰지 않는다");
   },

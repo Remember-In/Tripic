@@ -44,6 +44,8 @@ export const envSchema = z
     JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(30),
     /** 카카오 앱 app_id — 타 카카오 앱 토큰 차단용. 필수 (미설정 시 부팅 실패) */
     KAKAO_APP_ID: z.coerce.number().int().positive(),
+    /** 웹 OAuth 토큰 교환용. 미설정 시 네이티브 로그인은 유지되고 웹 로그인만 503. */
+    KAKAO_CLIENT_SECRET: z.string().min(1).optional(),
 
     /**
      * Sign in with Apple (docs/14-apple-login-design.md §7). 5개를 전부 넣거나 전부 비운다 —

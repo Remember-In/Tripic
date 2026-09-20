@@ -12,6 +12,15 @@ export const kakaoLoginSchema = z.object({
 });
 export type KakaoLoginInput = z.infer<typeof kakaoLoginSchema>;
 
+/** POST /auth/kakao/web — Kakao OAuth authorization code 교환 */
+export const kakaoWebLoginSchema = z.object({
+  code: z.string().min(1),
+  redirectUri: z.string().url(),
+  /** 카카오 REST API 키는 OAuth client_id로 사용하는 공개 식별자다. */
+  restApiKey: z.string().min(1),
+});
+export type KakaoWebLoginInput = z.infer<typeof kakaoWebLoginSchema>;
+
 /** POST /auth/apple — 네이티브 Apple 로그인 시트가 돌려준 값을 그대로 보낸다 (docs/14 §3) */
 export const appleLoginSchema = z.object({
   identityToken: z.string().min(1),
@@ -57,6 +66,10 @@ export const socialLoginResultSchema = authTokensSchema.extend({
   user: authUserSchema,
 });
 export type SocialLoginResult = z.infer<typeof socialLoginResultSchema>;
+
+/** 웹에는 refresh token을 본문으로 노출하지 않고 HttpOnly cookie로만 전달한다. */
+export type WebLoginResult = Omit<SocialLoginResult, "refreshToken">;
+export type WebRefreshResult = Omit<AuthTokens, "refreshToken">;
 
 /** 카카오 로그인 응답 — 공통 응답과 같다. 기존 앱 코드 호환을 위해 이름을 유지한다 */
 export const kakaoLoginResultSchema = socialLoginResultSchema;

@@ -3,6 +3,7 @@ import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
 import type { AuthTokens, SocialLoginResult } from "@tripic/shared";
+import type { KakaoWebLoginInput } from "@tripic/shared";
 import {
   KAKAO_VERIFIER,
   type KakaoVerifier,
@@ -52,6 +53,14 @@ export class AuthService implements SessionIssuer {
       providerUserId: kakaoUserId,
     });
     return this.startSession(account, isNewUser);
+  }
+
+  /** 웹 OAuth code를 access token으로 교환한 뒤 기존 검증·가입 흐름을 재사용한다. */
+  async loginWithKakaoCode(
+    input: KakaoWebLoginInput,
+  ): Promise<SocialLoginResult> {
+    const accessToken = await this.kakao.exchangeAuthorizationCode(input);
+    return this.loginWithKakao(accessToken);
   }
 
   /** 소셜 계정 확인이 끝난 사용자에게 세션을 발급한다 — 카카오·Apple 로그인 공통 */
