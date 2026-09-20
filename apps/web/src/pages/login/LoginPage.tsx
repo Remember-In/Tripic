@@ -44,9 +44,12 @@ export function LoginPage() {
   return (
     <main className="login-page">
       <section className="login-card" aria-labelledby="login-title">
-        <div className="brand-mark" aria-hidden="true">
-          T
-        </div>
+        <img
+          alt=""
+          aria-hidden="true"
+          className="brand-mark"
+          src="/favicon.svg"
+        />
         <p className="eyebrow">나의 사진으로 채우는 여행 지도</p>
         <h1 id="login-title">Tripic</h1>
         <p className="login-description">

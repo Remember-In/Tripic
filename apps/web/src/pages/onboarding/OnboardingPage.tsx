@@ -40,9 +40,12 @@ export function OnboardingPage() {
         className="login-card onboarding-card"
         aria-labelledby="onboarding-title"
       >
-        <div className="brand-mark" aria-hidden="true">
-          T
-        </div>
+        <img
+          alt=""
+          aria-hidden="true"
+          className="brand-mark"
+          src="/favicon.svg"
+        />
         <p className="eyebrow">새 계정으로 시작하기</p>
         <h1 id="onboarding-title">프로필 설정</h1>
         <p className="login-description">
