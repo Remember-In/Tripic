@@ -5,6 +5,9 @@ import { clearRecords } from "@/entities/record/api/records";
 import { useAuthSession } from "@/features/auth-session/model/AuthSessionProvider";
 import { requestJson } from "@/shared/api/http";
 
+const SUPPORT_URL =
+  "https://wary-traffic-2bf.notion.site/3d932d147ef780bcad20df708400b955";
+
 export function SettingsPage() {
   const { clearSession, logout, user } = useAuthSession();
   const navigate = useNavigate();
@@ -81,7 +84,9 @@ export function SettingsPage() {
       <section className="settings-card policy-links">
         <Link to="/privacy">개인정보 처리방침</Link>
         <Link to="/terms">서비스 이용약관</Link>
-        <a href="mailto:support@remin.dev">고객지원</a>
+        <a href={SUPPORT_URL} rel="noreferrer" target="_blank">
+          고객지원
+        </a>
       </section>
     </main>
   );
