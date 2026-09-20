@@ -237,7 +237,15 @@ describe("Users withdrawal (e2e)", () => {
         .expectStatus(204);
     });
 
-    it("연결 해제(consent-revoked) 후 탈퇴하면 revoke 없이 삭제된다", async () => {
+    /**
+     * 연결 해제는 세션을 전부 끊는다 (docs/14 §4) — 기존 access token 까지 즉시 막힌다.
+     * 그래서 탈퇴하려면 다시 로그인해야 하고, 그 과정에서 Apple 자격 증명이 새로 저장되므로
+     * 탈퇴는 정상적으로 revoke 를 호출한다.
+     *
+     * "자격 증명이 없는 사용자는 revoke 하지 않는다" 는 경로는 API 로는 더 이상 도달할 수 없어
+     * `apple-auth.service.spec.ts` 의 unlink 단위 테스트가 덮는다.
+     */
+    it("연결 해제(consent-revoked)는 기존 세션을 끊고, 재로그인 후 탈퇴는 정상 동작한다", async () => {
       const session = await loginWithApple("apple-withdraw-after-consent");
       await notifyApple(
         "consent-revoked",
@@ -248,9 +256,19 @@ describe("Users withdrawal (e2e)", () => {
       await spec()
         .delete("/users/me")
         .withBearerToken(session.accessToken)
+        .expectStatus(401);
+
+      const reauthenticated = await loginWithApple(
+        "apple-withdraw-after-consent",
+      );
+      await spec()
+        .delete("/users/me")
+        .withBearerToken(reauthenticated.accessToken)
         .expectStatus(204);
 
-      expect(appleApi.revoked).toEqual([]);
+      expect(appleApi.revoked).toEqual([
+        "apple-rt-apple-withdraw-after-consent",
+      ]);
     });
 
     it("카카오 계정 탈퇴는 Apple 을 호출하지 않는다", async () => {

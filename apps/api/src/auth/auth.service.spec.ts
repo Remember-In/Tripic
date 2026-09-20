@@ -64,6 +64,15 @@ class FakeAuthAccounts implements AuthAccounts {
 }
 
 class FakeRefreshTokens implements RefreshTokens {
+  async findActiveByFamily(familyId: string) {
+    for (const row of this.rows.values()) {
+      if (row.familyId === familyId && !row.revoked) {
+        return { userId: row.userId };
+      }
+    }
+    return null;
+  }
+
   rows = new Map<
     string,
     StoredRefreshToken & { tokenHash: string; replaced: boolean }

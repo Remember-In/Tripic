@@ -113,7 +113,7 @@ export class AuthService implements SessionIssuer {
     }
 
     return {
-      accessToken: await this.signAccessToken(stored.userId),
+      accessToken: await this.signAccessToken(stored.userId, stored.familyId),
       refreshToken: raw,
       expiresIn: this.accessTtlSec,
     };
@@ -153,14 +153,18 @@ export class AuthService implements SessionIssuer {
       expiresAt: this.refreshExpiry(),
     });
     return {
-      accessToken: await this.signAccessToken(userId),
+      accessToken: await this.signAccessToken(userId, familyId),
       refreshToken: raw,
       expiresIn: this.accessTtlSec,
     };
   }
 
-  private signAccessToken(userId: string): Promise<string> {
-    return this.jwt.signAsync({ sub: userId });
+  /**
+   * access token 에 rotation family 를 함께 담는다 — guard 가 이걸로 세션 생존을 확인한다.
+   * 이게 없으면 로그아웃·탈퇴 뒤에도 토큰이 TTL 만큼 통과한다 (docs/10 §3).
+   */
+  private signAccessToken(userId: string, familyId: string): Promise<string> {
+    return this.jwt.signAsync({ sub: userId, fam: familyId });
   }
 
   private newOpaqueToken(): string {
