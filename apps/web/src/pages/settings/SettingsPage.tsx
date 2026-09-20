@@ -1,5 +1,5 @@
-import { useMutation } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
 
 import { clearRecords } from "@/entities/record/api/records";
 import { useAuthSession } from "@/features/auth-session/model/AuthSessionProvider";
@@ -8,13 +8,22 @@ import { requestJson } from "@/shared/api/http";
 export function SettingsPage() {
   const { logout, user } = useAuthSession();
   const navigate = useNavigate();
-  const clear = useMutation({ mutationFn: clearRecords });
+  const queryClient = useQueryClient();
+  const clear = useMutation({
+    mutationFn: clearRecords,
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["records"] });
+    },
+  });
   const withdraw = useMutation({
     mutationFn: () =>
       requestJson<void>("/users/me", { auth: true, method: "DELETE" }),
     onSuccess: async () => {
-      await logout();
-      navigate("/login", { replace: true });
+      try {
+        await logout();
+      } finally {
+        navigate("/login", { replace: true });
+      }
     },
   });
 
@@ -48,6 +57,11 @@ export function SettingsPage() {
         >
           전체 기록 삭제
         </button>
+        {clear.isError ? (
+          <p className="form-error" role="alert">
+            전체 기록을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.
+          </p>
+        ) : null}
         <button
           className="danger-link"
           type="button"
@@ -59,10 +73,15 @@ export function SettingsPage() {
         >
           회원탈퇴
         </button>
+        {withdraw.isError ? (
+          <p className="form-error" role="alert">
+            회원탈퇴를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.
+          </p>
+        ) : null}
       </section>
       <section className="settings-card policy-links">
-        <a href="/privacy">개인정보 처리방침</a>
-        <a href="/terms">서비스 이용약관</a>
+        <Link to="/privacy">개인정보 처리방침</Link>
+        <Link to="/terms">서비스 이용약관</Link>
         <a href="mailto:support@remin.dev">고객지원</a>
       </section>
     </main>

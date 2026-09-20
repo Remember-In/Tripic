@@ -30,10 +30,13 @@ TRIPIC_API_PROXY_TARGET=https://tripic.remin.dev
 
 ## 현재 서버 연결 상태
 
-- 완료: 웹 카카오 authorization code 교환, refresh cookie rotation, 로그아웃
-- 완료: 기록·메모·사진 저장 및 다른 기기 조회
-- 대기: 관광지 키워드 검색, 방문 지역 저장, 지도 스탬프 집계
+- 서버 구현 완료·배포 확인 필요: 웹 카카오 authorization code 교환, refresh cookie rotation, 로그아웃
+- 연결 완료: 기록·메모·사진 저장, 대표 사진 목록, 수정·삭제 및 다른 기기 조회
+- 연결 완료: 관광지 키워드 검색 (`GET /tourism/places?keyword=...`)
+- 대기: 선택한 관광지의 방문 지역 저장, 지역 진행률 조회, 지도 스탬프 집계
 
-마지막 세 기능은 `apps/api/AGENTS.md`의 위치정보지원센터 사전 검토 조건이 해제된 뒤 서버 API를 노출해야 한다. 웹은 `/tourism/search?keyword=...` 계약과 장소 선택 UI까지 준비되어 있다.
+장소 선택 UI는 서버의 `KtoListItem` 계약을 사용한다. 방문 지역 저장 API가 추가되기 전까지 장소 선택은 선택 사항이며 기록 생성 자체를 막지 않는다. 추후 방문 기록 API 연결 시 `RecordCreatePage`의 `selectedPlace`를 그대로 전달하고, 지역 진행률 응답을 `HomePage`의 `TravelMap`에 주입한다.
+
+개인정보 처리방침과 서비스 이용약관은 인증 없이 각각 `/privacy`, `/terms`에서 확인할 수 있다.
 
 카카오 REST API 키의 클라이언트 시크릿이 활성화되어 있으므로 API 배포 환경에는 `KAKAO_CLIENT_SECRET`을 반드시 비밀 환경변수로 설정한다. 이 값은 웹 번들 또는 Git에 포함하면 안 된다.

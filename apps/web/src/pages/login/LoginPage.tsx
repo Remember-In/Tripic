@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 
 import { useAuthSession } from "@/features/auth-session/model/AuthSessionProvider";
 import { kakaoLoginConfig } from "@/shared/config/env";
@@ -62,7 +62,8 @@ export function LoginPage() {
           </p>
         ) : null}
         <p className="legal-caption">
-          로그인하면 서비스 이용약관과 개인정보 처리방침에 동의하게 됩니다.
+          로그인하면 <Link to="/terms">서비스 이용약관</Link>과{" "}
+          <Link to="/privacy">개인정보 처리방침</Link>에 동의하게 됩니다.
         </p>
         {import.meta.env.DEV ? (
           <a className="preview-link" href="/?preview=1">

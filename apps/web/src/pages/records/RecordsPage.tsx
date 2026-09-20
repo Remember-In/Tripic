@@ -1,15 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 
-import { getRecord, listRecords } from "@/entities/record/api/records";
+import type { RecordPhoto } from "@tripic/shared";
+
+import { listRecords } from "@/entities/record/api/records";
 import { AuthenticatedImage } from "@/shared/ui/authenticated-image/AuthenticatedImage";
 
-function RecordCover({ recordId }: { recordId: string }) {
-  const detail = useQuery({
-    queryFn: () => getRecord(recordId),
-    queryKey: ["records", recordId],
-  });
-  const photo = detail.data?.days.flatMap((day) => day.photos)[0];
+function RecordCover({ photo }: { photo: RecordPhoto | null }) {
   return photo ? (
     <AuthenticatedImage alt="사용자가 등록한 여행 사진" path={photo.url} />
   ) : (
@@ -60,7 +57,7 @@ export function RecordsPage() {
             to={`/records/${record.id}`}
           >
             <div className="record-cover">
-              <RecordCover recordId={record.id} />
+              <RecordCover photo={record.coverPhoto} />
             </div>
             <div className="record-card-body">
               <span>{dateRange(record.startDate, record.endDate)}</span>

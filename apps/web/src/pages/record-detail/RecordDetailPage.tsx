@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { deleteRecord, getRecord } from "@/entities/record/api/records";
 import { AuthenticatedImage } from "@/shared/ui/authenticated-image/AuthenticatedImage";
@@ -42,17 +42,27 @@ export function RecordDetailPage() {
           <h1>{record.data.title}</h1>
           <p>{record.data.hashtags.join(" ")}</p>
         </div>
-        <button
-          className="danger-button"
-          type="button"
-          disabled={remove.isPending}
-          onClick={() => {
-            if (window.confirm("이 여행 기록을 영구 삭제할까요?"))
-              remove.mutate();
-          }}
-        >
-          기록 삭제
-        </button>
+        <div className="heading-actions">
+          <Link className="secondary-button" to={`/records/${recordId}/edit`}>
+            기록 수정
+          </Link>
+          <button
+            className="danger-button"
+            type="button"
+            disabled={remove.isPending}
+            onClick={() => {
+              if (window.confirm("이 여행 기록을 영구 삭제할까요?"))
+                remove.mutate();
+            }}
+          >
+            기록 삭제
+          </button>
+        </div>
+        {remove.isError ? (
+          <p className="form-error" role="alert">
+            기록을 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.
+          </p>
+        ) : null}
       </div>
 
       <div className="day-list">

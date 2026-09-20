@@ -1,8 +1,10 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
   createRecord,
+  deleteRecord,
   uploadRecordPhoto,
   upsertRecordEntry,
 } from "@/entities/record/api/records";
@@ -26,6 +28,7 @@ function previewEnabled() {
 
 export function RecordCreatePage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [title, setTitle] = useState("");
   const [date, setDate] = useState(today);
   const [note, setNote] = useState("");
@@ -62,10 +65,6 @@ export function RecordCreatePage() {
       setError("여행 사진을 한 장 이상 선택해 주세요.");
       return;
     }
-    if (!selectedPlace) {
-      setError("방문한 관광지를 검색해 하나 선택해 주세요.");
-      return;
-    }
     if (previewEnabled()) {
       setError(
         "미리보기에서는 화면만 확인할 수 있습니다. 실제 저장은 서버 연결 후 가능합니다.",
@@ -74,6 +73,7 @@ export function RecordCreatePage() {
     }
 
     setSaving(true);
+    let createdRecordId: string | null = null;
     try {
       const tags = hashtags
         .split(/[#,\s]+/)
@@ -84,6 +84,7 @@ export function RecordCreatePage() {
         title: title.trim(),
         hashtags: tags,
       });
+      createdRecordId = record.id;
       if (note.trim()) {
         await upsertRecordEntry(record.id, date, {
           content: note.trim(),
@@ -93,12 +94,28 @@ export function RecordCreatePage() {
       for (const file of files) {
         await uploadRecordPhoto(record.id, date, await preparePhoto(file));
       }
+      await queryClient.invalidateQueries({ queryKey: ["records"] });
       navigate(`/records/${record.id}`);
     } catch (reason) {
+      let cleanupFailed = false;
+      if (createdRecordId) {
+        try {
+          await deleteRecord(createdRecordId);
+          queryClient.removeQueries({ queryKey: ["records", createdRecordId] });
+        } catch {
+          cleanupFailed = true;
+        }
+      }
       setError(
-        reason instanceof Error
-          ? reason.message
-          : "기록을 저장하지 못했습니다.",
+        `${
+          reason instanceof Error
+            ? reason.message
+            : "기록을 저장하지 못했습니다."
+        }${
+          cleanupFailed
+            ? " 일부 데이터가 남았을 수 있습니다. 내 기록에서 확인해 주세요."
+            : ""
+        }`,
       );
     } finally {
       setSaving(false);
@@ -192,7 +209,7 @@ export function RecordCreatePage() {
         </section>
 
         <section className="compose-card place-section">
-          <h2>3. 관광지 확인</h2>
+          <h2>3. 관광지 확인 (선택)</h2>
           <p className="section-description">
             현재 위치 대신 관광지 이름을 직접 검색해 방문 지역을 확정합니다.
           </p>
@@ -230,17 +247,17 @@ export function RecordCreatePage() {
                 onClick={() => setSelectedPlace(place)}
                 type="button"
               >
-                <strong>{place.name}</strong>
+                <strong>{place.title}</strong>
                 <span>{place.address}</span>
               </button>
             ))}
           </div>
           {selectedPlace ? (
-            <p className="selected-place">선택됨 · {selectedPlace.name}</p>
+            <p className="selected-place">선택됨 · {selectedPlace.title}</p>
           ) : null}
           <p className="integration-note">
-            방문 지역 스탬프 저장은 서버의 관광지 검색·방문 지역 API 연결 후
-            활성화됩니다.
+            관광지를 선택하지 않아도 기록을 저장할 수 있습니다. 선택한 장소의
+            방문 지역 스탬프 반영은 방문 기록 API 연결 후 활성화됩니다.
           </p>
         </section>
 

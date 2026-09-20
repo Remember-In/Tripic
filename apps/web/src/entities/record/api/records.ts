@@ -3,6 +3,7 @@ import type {
   RecordDetail,
   RecordPhoto,
   RecordSummary,
+  UpdateRecordInput,
   UpsertEntryInput,
 } from "@tripic/shared";
 
@@ -24,6 +25,14 @@ export function createRecord(input: CreateRecordInput) {
   });
 }
 
+export function updateRecord(recordId: string, input: UpdateRecordInput) {
+  return requestJson<RecordSummary>(`/records/${recordId}`, {
+    auth: true,
+    body: JSON.stringify(input),
+    method: "PATCH",
+  });
+}
+
 export function upsertRecordEntry(
   recordId: string,
   date: string,
@@ -33,6 +42,13 @@ export function upsertRecordEntry(
     auth: true,
     body: JSON.stringify(input),
     method: "PUT",
+  });
+}
+
+export function deleteRecordEntry(recordId: string, date: string) {
+  return requestJson<void>(`/records/${recordId}/days/${date}/entry`, {
+    auth: true,
+    method: "DELETE",
   });
 }
 
