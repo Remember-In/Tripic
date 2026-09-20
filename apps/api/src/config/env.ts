@@ -129,6 +129,14 @@ export const envSchema = z
      */
     KTO_SERVICE_KEY: z.string().min(1).optional(),
 
+    /**
+     * 이미지 빌드 시 새겨지는 값 (Dockerfile ARG → ENV). 로컬 실행에는 없다.
+     * GET /health 로 노출해 "지금 어느 빌드가 떠 있는가" 를 밖에서 확인할 수 있게 한다 —
+     * 라우트가 늘지 않는 패치 릴리스는 다른 방법으로 구분되지 않는다.
+     */
+    APP_VERSION: z.string().min(1).optional(),
+    COMMIT_SHA: z.string().min(1).optional(),
+
     PORT: z.coerce.number().int().default(3000),
 
     /**

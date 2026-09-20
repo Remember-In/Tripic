@@ -24,8 +24,13 @@ describe("API (e2e)", () => {
     await app.close();
   });
 
-  it("GET /health → 200 { status: ok }", async () => {
-    await spec().get("/health").expectStatus(200).expectJson({ status: "ok" });
+  it("GET /health → 200, 상태와 떠 있는 빌드를 함께 돌려준다", async () => {
+    // 빌드 인자 없이 띄운 e2e 에서는 version·commit 이 null 이지만 키는 빠지지 않는다 —
+    // 배포 환경에서 이 값으로 어느 빌드가 떠 있는지 확인한다
+    await spec()
+      .get("/health")
+      .expectStatus(200)
+      .expectJson({ status: "ok", version: null, commit: null });
   });
 
   it("Bearer 없이도 통과한다 — 플랫폼 probe 가 인증 없이 호출한다", async () => {

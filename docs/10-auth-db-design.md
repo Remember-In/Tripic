@@ -266,7 +266,7 @@ erDiagram
 
 | 변수                                                | 용도                                                                                                                                            | 상태 |
 | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ---- |
-| `DATABASE_URL`                                      | PostgreSQL 접속 문자열                                                                                                                          | 사용 |
+| `DATABASE_URL`                                      | PostgreSQL 접속 문자열 — 운영에서는 `sslmode=verify-full` 을 명시한다 (§8.1)                                                                    | 사용 |
 | `JWT_ACCESS_SECRET`                                 | JWT 서명 키 (32자 이상)                                                                                                                         | 사용 |
 | `JWT_ACCESS_TTL_SEC`                                | access token 수명 (기본 900)                                                                                                                    | 사용 |
 | `JWT_REFRESH_TTL_DAYS`                              | refresh token 수명 (기본 30)                                                                                                                    | 사용 |
@@ -284,6 +284,25 @@ erDiagram
 템플릿: [apps/api/.env.example](../apps/api/.env.example)
 
 ## 8. 로컬 개발 / 마이그레이션 워크플로
+
+### 8.1 DATABASE_URL 의 sslmode
+
+운영 접속 문자열에는 **`sslmode=verify-full` 을 명시한다.**
+
+명시하지 않거나 `require`·`prefer`·`verify-ca` 를 쓰면 부팅 때마다 이 경고가 찍힌다:
+
+> SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for
+> 'verify-full'. In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes
+> will adopt standard libpq semantics, which have weaker security guarantees.
+
+지금은 `pg` 가 이 값들을 `verify-full` 로 취급하지만, 다음 메이저에서 libpq 의미(인증서·호스트명
+검증 없음)로 바뀐다. 즉 **값을 그대로 두면 라이브러리 업그레이드만으로 검증이 조용히 약해진다.**
+`verify-full` 을 적어 두면 동작은 지금과 같고 그 변경에 영향받지 않는다.
+
+`uselibpqcompat=true&sslmode=require` 로 경고를 없애는 길도 있지만 검증을 포기하는 쪽이라 쓰지 않는다.
+
+> 이 값은 레포가 아니라 **Northflank 환경변수**에 있다. 코드 배포로 고쳐지지 않으므로
+> 콘솔에서 직접 바꿔야 한다. api 서비스와 마이그레이션 job 양쪽 모두 해당한다.
 
 ```bash
 # 1. DB 기동 (레포 루트, 호스트 포트 48291 — 로컬 5432 점유와 충돌 회피)
