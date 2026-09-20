@@ -1,27 +1,25 @@
 import { useQuery } from "@tanstack/react-query";
+import type { RegionProgress } from "@tripic/shared";
 import { Link } from "react-router-dom";
 
-import {
-  getMapProgress,
-  type MapRegionProgress,
-} from "@/entities/record-place/api/recordPlaces";
+import { getMapProgress } from "@/entities/record-place/api/recordPlaces";
 import { listRecords } from "@/entities/record/api/records";
 import { visitRegionApiEnabled } from "@/shared/config/env";
 import { TravelMap } from "@/widgets/travel-map/TravelMap";
 
-const PREVIEW_REGION_PROGRESS: MapRegionProgress[] = [
+const PREVIEW_REGION_PROGRESS: RegionProgress[] = [
   {
     areaCode: "1",
-    firstVisitedAt: "2026-09-01T00:00:00.000Z",
+    firstVisitedAt: "2026-09-01",
     id: "preview-seoul",
-    lastVisitedAt: "2026-09-01T00:00:00.000Z",
+    lastVisitedAt: "2026-09-01",
     visitCount: 1,
   },
   {
     areaCode: "6",
-    firstVisitedAt: "2026-09-02T00:00:00.000Z",
+    firstVisitedAt: "2026-09-02",
     id: "preview-busan",
-    lastVisitedAt: "2026-09-02T00:00:00.000Z",
+    lastVisitedAt: "2026-09-02",
     visitCount: 1,
   },
 ];

@@ -48,7 +48,7 @@ export async function searchTouristPlaces(keyword: string) {
   }
 
   return requestJson<TouristPlace[]>(
-    `/tourism/places?keyword=${encodeURIComponent(normalized)}&limit=10`,
+    `/tourism/search?keyword=${encodeURIComponent(normalized)}&limit=10`,
     { auth: true },
   );
 }

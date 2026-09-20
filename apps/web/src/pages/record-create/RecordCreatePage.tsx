@@ -101,7 +101,7 @@ export function RecordCreatePage() {
         try {
           await createRecordPlace(record.id, {
             contentId: selectedPlace.contentId,
-            visitedAt: `${date}T00:00:00.000Z`,
+            visitedAt: date,
           });
         } catch {
           placeSyncFailed = true;

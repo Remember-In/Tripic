@@ -46,7 +46,7 @@ export function RecordPlacesEditor({ recordId }: { recordId: string }) {
     mutationFn: () =>
       createRecordPlace(recordId, {
         contentId: selected?.contentId ?? "",
-        visitedAt: `${visitedDate}T00:00:00.000Z`,
+        visitedAt: visitedDate,
       }),
     onSuccess: async () => {
       setKeyword("");
@@ -64,7 +64,7 @@ export function RecordPlacesEditor({ recordId }: { recordId: string }) {
   const changeDate = useMutation({
     mutationFn: ({ placeId, date }: { date: string; placeId: string }) =>
       updateRecordPlace(recordId, placeId, {
-        visitedAt: `${date}T00:00:00.000Z`,
+        visitedAt: date,
       }),
     onSuccess: invalidatePlaces,
   });

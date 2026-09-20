@@ -1,3 +1,5 @@
+import type { RegionProgress } from "@tripic/shared";
+
 import { requestJson } from "@/shared/api/http";
 
 export type RecordPlace = {
@@ -11,17 +13,9 @@ export type RecordPlace = {
   visitedAt: string;
 };
 
-export type MapRegionProgress = {
-  areaCode: string;
-  firstVisitedAt: string;
-  id: string;
-  lastVisitedAt: string;
-  visitCount: number;
-};
-
 export type MapProgress = {
   recordedPlaceCount: number;
-  regions: MapRegionProgress[];
+  regions: RegionProgress[];
   totalAreaCount: number;
   visitedAreaCount: number;
 };
