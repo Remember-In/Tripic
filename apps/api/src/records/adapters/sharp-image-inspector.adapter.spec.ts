@@ -76,10 +76,12 @@ describe("SharpImageInspectorAdapter", () => {
     await expect(reasonOf(withExif)).resolves.toBe("HAS_METADATA");
   });
 
-  it("ICC 프로파일이 남아 있어도 거부한다", async () => {
+  it("위치정보가 아닌 ICC 색상 프로파일은 허용한다", async () => {
     const withIcc = await sharp(jpeg).withIccProfile("srgb").toBuffer();
 
-    await expect(reasonOf(withIcc)).resolves.toBe("HAS_METADATA");
+    await expect(inspector.inspect(withIcc)).resolves.toMatchObject({
+      mimeType: "image/jpeg",
+    });
   });
 
   it("변 길이가 4096px 를 넘으면 TOO_LARGE_DIMENSIONS", async () => {

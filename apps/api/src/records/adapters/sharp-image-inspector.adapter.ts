@@ -44,9 +44,10 @@ export class SharpImageInspectorAdapter implements ImageInspector {
       throw new ImageRejected("TOO_LARGE_DIMENSIONS");
     }
 
-    // 위치 메타데이터가 남아 있으면 거부한다. exif/xmp 는 GPS 를 직접 품고,
-    // iptc/icc 는 위치는 아니지만 사본에 남을 이유가 없어 함께 막는다.
-    if (metadata.exif || metadata.xmp || metadata.iptc || metadata.icc) {
+    // 위치·작성자 메타데이터가 남아 있으면 거부한다. ICC는 픽셀 색상 해석용
+    // 프로파일이고 GPS/개인정보를 담지 않는다. Safari의 canvas JPEG에도 붙을 수
+    // 있으므로 ICC만으로 업로드를 거부하면 안전하게 재인코딩한 사진도 막힌다.
+    if (metadata.exif || metadata.xmp || metadata.iptc) {
       throw new ImageRejected("HAS_METADATA");
     }
 
