@@ -1,4 +1,5 @@
 import type { AuthUser, Me } from "@tripic/shared";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   createContext,
   type PropsWithChildren,
@@ -50,6 +51,7 @@ function previewSession() {
 }
 
 export function AuthSessionProvider({ children }: PropsWithChildren) {
+  const queryClient = useQueryClient();
   const [isPreview] = useState(previewSession);
   const [status, setStatus] = useState<AuthStatus>(
     isPreview ? "authenticated" : "loading",
@@ -59,10 +61,10 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
   );
 
   const becomeAnonymous = useCallback(() => {
-    setAccessToken(null);
+    queryClient.clear();
     setUser(null);
     setStatus("anonymous");
-  }, []);
+  }, [queryClient]);
 
   const loadProfile = useCallback(async () => {
     const profile = await requestJson<Me>("/users/me", { auth: true });
@@ -82,11 +84,15 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
     });
   }, [becomeAnonymous, isPreview, status]);
 
-  const completeLogin = useCallback((result: WebLoginResult) => {
-    setAccessToken(result.accessToken);
-    setUser(result.user);
-    setStatus("authenticated");
-  }, []);
+  const completeLogin = useCallback(
+    (result: WebLoginResult) => {
+      queryClient.clear();
+      setAccessToken(result.accessToken);
+      setUser(result.user);
+      setStatus("authenticated");
+    },
+    [queryClient],
+  );
 
   const logout = useCallback(async () => {
     try {
@@ -95,6 +101,7 @@ export function AuthSessionProvider({ children }: PropsWithChildren) {
         method: "POST",
       });
     } finally {
+      setAccessToken(null);
       becomeAnonymous();
     }
   }, [becomeAnonymous]);
