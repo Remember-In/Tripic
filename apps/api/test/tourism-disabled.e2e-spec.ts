@@ -64,7 +64,8 @@ describe("TourAPI 미설정 서버 (e2e)", () => {
 
   it.each([
     "/tourism/areas",
-    "/tourism/places?keyword=경복궁",
+    "/tourism/search?keyword=경복궁",
+    "/tourism/places?areaCode=1",
     "/tourism/places/126508",
     "/tourism/places/126508/images",
   ])("%s 는 503", async (path) => {

@@ -7,9 +7,13 @@ import type {
 } from "@tripic/shared";
 import { KTO_CLIENT, type KtoClient } from "@/tourism/ports/kto-client.port";
 
+interface SearchInput {
+  keyword: string;
+  limit: number;
+}
+
 interface FindPlacesInput {
-  keyword?: string;
-  areaCode?: string;
+  areaCode: string;
   sigunguCode?: string;
   limit: number;
 }
@@ -24,18 +28,17 @@ interface FindPlacesInput {
 export class TourismService {
   constructor(@Inject(KTO_CLIENT) private readonly kto: KtoClient) {}
 
-  /** keyword 와 areaCode 는 계약에서 배타적으로 검증된다 (tourism.contract.ts) */
-  async findPlaces(input: FindPlacesInput): Promise<readonly KtoListItem[]> {
-    if (input.keyword) {
-      return this.kto.searchByKeyword(input.keyword, input.limit);
-    }
-    if (input.areaCode) {
-      return this.kto.findByArea(
-        { areaCode: input.areaCode, sigunguCode: input.sigunguCode },
-        input.limit,
-      );
-    }
-    return [];
+  /** GET /tourism/search — 사용자가 직접 입력한 키워드로 찾는다 */
+  search(input: SearchInput): Promise<readonly KtoListItem[]> {
+    return this.kto.searchByKeyword(input.keyword, input.limit);
+  }
+
+  /** GET /tourism/places — 시·도(필수)와 시·군·구(선택)로 찾는다 */
+  findPlaces(input: FindPlacesInput): Promise<readonly KtoListItem[]> {
+    return this.kto.findByArea(
+      { areaCode: input.areaCode, sigunguCode: input.sigunguCode },
+      input.limit,
+    );
   }
 
   async findDetail(contentId: string): Promise<KtoPlaceDetail> {

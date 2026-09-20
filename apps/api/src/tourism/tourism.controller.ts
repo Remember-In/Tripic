@@ -9,7 +9,9 @@ import { ZodValidationPipe } from "@/common/zod-validation.pipe";
 import {
   contentIdSchema,
   tourismPlacesQuerySchema,
+  tourismSearchQuerySchema,
   type TourismPlacesQuery,
+  type TourismSearchQuery,
 } from "@/tourism/tourism.contract";
 import { TourismService } from "@/tourism/tourism.service";
 
@@ -31,9 +33,18 @@ export class TourismController {
   }
 
   /**
-   * GET /tourism/places — 키워드 검색 또는 지역 검색 (둘은 배타적).
-   * 라우트를 나누지 않는 이유는 `:contentId` 와의 선언 순서 모호성을 없애기 위해서다.
+   * GET /tourism/search — 키워드 검색.
+   * `places` 의 형제 경로라 `places/:contentId` 와 선언 순서로 충돌하지 않는다.
    */
+  @Get("search")
+  search(
+    @Query(new ZodValidationPipe(tourismSearchQuerySchema))
+    query: TourismSearchQuery,
+  ): Promise<readonly KtoListItem[]> {
+    return this.tourism.search(query);
+  }
+
+  /** GET /tourism/places — 시·도(필수)와 시·군·구(선택)로 찾는다 */
   @Get("places")
   findPlaces(
     @Query(new ZodValidationPipe(tourismPlacesQuerySchema))
