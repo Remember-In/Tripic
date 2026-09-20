@@ -40,6 +40,9 @@ const kakaoAuthStub: KakaoAuthClient = {
 
 const REDIRECT_URI = "https://tripic.example/auth/kakao/callback";
 
+/** vitest.config.e2e.ts 의 JWT_REFRESH_TTL_DAYS 와 맞춘다 */
+const REFRESH_TTL_DAYS = 30;
+
 interface RefreshCookie {
   value: string;
   attributes: Map<string, string>;
@@ -176,6 +179,18 @@ describe("웹 인증 (e2e)", () => {
       const cookie = await webLogin("web-4");
 
       expect(cookie.attributes.has("domain")).toBe(false);
+    });
+
+    /**
+     * Max-Age 가 없으면 세션 쿠키가 되어 브라우저를 닫을 때 사라진다.
+     * refresh token 은 DB 에서 JWT_REFRESH_TTL_DAYS 만큼 살아 있으므로 수명이 맞아야 한다.
+     */
+    it("refresh token 수명만큼 Max-Age 를 준다 — 세션 쿠키가 되면 안 된다", async () => {
+      const cookie = await webLogin("web-5");
+      const maxAge = cookie.attributes.get("max-age");
+
+      expect(maxAge).toBeDefined();
+      expect(Number(maxAge)).toBe(REFRESH_TTL_DAYS * 24 * 60 * 60);
     });
 
     it("교환할 수 없는 code 는 401", async () => {

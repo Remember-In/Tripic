@@ -26,6 +26,7 @@ import {
   type StoredEntry,
   type StoredPhoto,
 } from "@/records/ports/records-repository.port";
+import { recordPhotoUrl } from "@/records/record-photo-url";
 
 /** 할당량 (docs/11 §3.1) — 값 조정이 필요해지면 app-config 로 원격화한다 */
 export const MAX_PHOTO_BYTES = 1024 * 1024;
@@ -143,7 +144,7 @@ export class RecordsService {
     });
     if (!photoId) throw this.notFound();
 
-    return { id: photoId, url: this.photoUrl(recordId, date, photoId) };
+    return { id: photoId, url: recordPhotoUrl(recordId, date, photoId) };
   }
 
   async findPhoto(
@@ -182,10 +183,6 @@ export class RecordsService {
       }
       throw error;
     }
-  }
-
-  private photoUrl(recordId: string, date: string, photoId: string): string {
-    return `/records/${recordId}/days/${date}/photos/${photoId}`;
   }
 
   /**

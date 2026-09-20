@@ -16,17 +16,23 @@ import {
   refreshTokenSchema,
   type AppleLoginInput,
   type AppleNotificationInput,
+  type AuthTokens,
   type KakaoLoginInput,
   type KakaoWebLoginInput,
   type RefreshTokenInput,
   type WebAuthTokens,
   type WebSocialLoginResult,
 } from "@tripic/shared";
+import { ConfigService } from "@nestjs/config";
+import type { CookieOptions } from "express";
 import {
+  REFRESH_COOKIE_CLEAR_OPTIONS,
   REFRESH_COOKIE_NAME,
-  REFRESH_COOKIE_OPTIONS,
   readRefreshCookie,
+  refreshCookieOptions,
+  shouldClearRefreshCookie,
 } from "@/auth/web-session-cookie";
+import type { Env } from "@/config/env";
 import { AppleAuthService } from "@/auth/apple-auth.service";
 import { AuthService } from "@/auth/auth.service";
 import { CurrentUser } from "@/auth/current-user.decorator";
@@ -35,10 +41,18 @@ import { ZodValidationPipe } from "@/common/zod-validation.pipe";
 
 @Controller("auth")
 export class AuthController {
+  /** 쿠키 수명은 refresh token 수명과 같아야 한다 — 어긋나면 한쪽만 먼저 죽는다 */
+  private readonly refreshCookie: CookieOptions;
+
   constructor(
     private readonly auth: AuthService,
     private readonly apple: AppleAuthService,
-  ) {}
+    config: ConfigService<Env, true>,
+  ) {
+    this.refreshCookie = refreshCookieOptions(
+      config.get("JWT_REFRESH_TTL_DAYS", { infer: true }),
+    );
+  }
 
   /** POST /auth/kakao — 카카오 access token 교환 로그인/가입 (201) */
   @Public()
@@ -61,7 +75,7 @@ export class AuthController {
   ): Promise<WebSocialLoginResult> {
     const { refreshToken, ...session } =
       await this.auth.loginWithKakaoWebCode(body);
-    response.cookie(REFRESH_COOKIE_NAME, refreshToken, REFRESH_COOKIE_OPTIONS);
+    response.cookie(REFRESH_COOKIE_NAME, refreshToken, this.refreshCookie);
     return session;
   }
 
@@ -75,21 +89,22 @@ export class AuthController {
   ): Promise<WebAuthTokens> {
     const presented = readRefreshCookie(request.headers.cookie);
     if (!presented) {
-      response.clearCookie(REFRESH_COOKIE_NAME, REFRESH_COOKIE_OPTIONS);
+      response.clearCookie(REFRESH_COOKIE_NAME, REFRESH_COOKIE_CLEAR_OPTIONS);
       throw new UnauthorizedException("missing refresh token");
     }
 
-    let rotated;
+    let rotated: AuthTokens;
     try {
       rotated = await this.auth.refresh(presented);
     } catch (error) {
-      // 죽은 쿠키를 남기면 웹이 같은 토큰으로 무한 재시도한다
-      response.clearCookie(REFRESH_COOKIE_NAME, REFRESH_COOKIE_OPTIONS);
+      if (shouldClearRefreshCookie(error)) {
+        response.clearCookie(REFRESH_COOKIE_NAME, REFRESH_COOKIE_CLEAR_OPTIONS);
+      }
       throw error;
     }
 
     const { refreshToken, ...tokens } = rotated;
-    response.cookie(REFRESH_COOKIE_NAME, refreshToken, REFRESH_COOKIE_OPTIONS);
+    response.cookie(REFRESH_COOKIE_NAME, refreshToken, this.refreshCookie);
     return tokens;
   }
 
@@ -109,7 +124,7 @@ export class AuthController {
     if (presented) {
       await this.auth.logout(userId, presented);
     }
-    response.clearCookie(REFRESH_COOKIE_NAME, REFRESH_COOKIE_OPTIONS);
+    response.clearCookie(REFRESH_COOKIE_NAME, REFRESH_COOKIE_CLEAR_OPTIONS);
   }
 
   /** POST /auth/apple — Apple identity token 검증 + code 교환 로그인/가입 (201, docs/14 §3) */

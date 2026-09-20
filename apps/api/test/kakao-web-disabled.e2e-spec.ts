@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { Test } from "@nestjs/testing";
 import { UnauthorizedException, type INestApplication } from "@nestjs/common";
 import { request, spec } from "pactum";
@@ -12,9 +12,20 @@ import { REFRESH_COOKIE_NAME } from "@/auth/web-session-cookie";
 
 /**
  * 카카오 웹 env 를 비운 서버 (docs/15 §2).
- * e2e 기본 env 에는 KAKAO_WEB_* 이 없으므로, KAKAO_AUTH_CLIENT 를 교체하지 않는 것만으로
- * 비활성 adapter 가 붙은 상태가 된다.
+ *
+ * ConfigModule 이 AppModule import 시점에 apps/api/.env 까지 읽으므로, vi.hoisted 로 먼저 지운다.
+ * 이게 없으면 개발자가 .env 에 KAKAO_WEB_* 을 채우는 순간 실제 adapter 가 붙어
+ * 이 테스트가 kauth.kakao.com 에 실제 요청을 날린다.
  */
+vi.hoisted(() => {
+  for (const key of [
+    "KAKAO_WEB_REST_API_KEY",
+    "KAKAO_WEB_REDIRECT_URIS",
+    "KAKAO_WEB_CLIENT_SECRET",
+  ]) {
+    delete process.env[key];
+  }
+});
 const kakaoStub: KakaoVerifier = {
   async verifyAccessToken(token: string) {
     if (!token.startsWith("valid-")) {

@@ -106,10 +106,13 @@ class FakeRecords implements RecordsRepository {
   ): Promise<RecordDetail | null> {
     const row = this.own(userId, recordId);
     if (!row) return null;
+    // RecordDetail 에 없는 요약 전용 필드는 모두 떼어낸다 — 스프레드는 초과 프로퍼티
+    // 검사를 받지 않아, 빠뜨리면 실제 어댑터가 만들지 않는 형태를 fake 가 돌려준다
     const {
       entryCount: _count,
       startDate: _start,
       endDate: _end,
+      coverPhoto: _cover,
       ...rest
     } = row.summary;
     return {

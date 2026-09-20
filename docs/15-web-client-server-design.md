@@ -71,8 +71,12 @@ env 검증 단계에서 http·https 스킴만 허용해 `javascript:` 같은 값
 **HttpOnly 쿠키로만** 내려보내고 응답 본문에서는 제거한다.
 
 ```
-Set-Cookie: tripic_rt=<opaque>; HttpOnly; Secure; SameSite=Lax; Path=/
+Set-Cookie: tripic_rt=<opaque>; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax; Path=/
 ```
+
+`Max-Age` 는 `JWT_REFRESH_TTL_DAYS` 와 같다. **생략하면 세션 쿠키가 되어 브라우저를 닫을 때 사라지고**,
+DB 의 refresh token 은 30일 살아 있는데 쿠키만 먼저 죽어 "로그인 유지" 가 깨진다
+(revoke 되지 않은 토큰 행만 남는다).
 
 ### 3.1 `Path=/` 인 이유
 
@@ -110,7 +114,9 @@ ambient authority(쿠키)를 새로 도입하므로 검토가 필요하다.
 
 - `POST /auth/refresh/web` — 쿠키에서 읽어 기존 `AuthService.refresh` 로 rotation 한다.
   재사용 감지 시 family 전체 revoke 라는 의미가 body 방식과 동일하게 유지된다.
-  실패하면 **쿠키를 지운 뒤** 401 을 던진다 — 죽은 쿠키를 남기면 웹이 같은 토큰으로 무한 재시도한다.
+  **토큰이 죽은 경우(401)에만 쿠키를 지운다** — 죽은 쿠키를 남기면 웹이 같은 토큰으로 무한 재시도하지만,
+  반대로 DB 장애 같은 일시 오류(500)에서 지우면 아직 살아 있는 토큰을 버려 재시도로 복구할 수 있는
+  상황을 영구 로그아웃으로 만든다. 이 판단은 `shouldClearRefreshCookie` 한 곳에 모아 단위 테스트로 고정한다.
 - `POST /auth/logout/web` — Bearer 로 인증하고 쿠키의 토큰 family 를 revoke 한다.
   쿠키 유무와 관계없이 지우고 204 로 끝낸다(멱등). 소유권 검사는 `AuthService.logout` 이 그대로 한다.
 - 두 방식은 **같은 저장소를 공유한다.** 네이티브가 받은 refresh token 을 쿠키에 담아도 회전된다.
