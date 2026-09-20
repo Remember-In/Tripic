@@ -110,7 +110,8 @@ describe("Tourism 프록시 (e2e)", () => {
   describe("인증", () => {
     it.each([
       "/tourism/areas",
-      "/tourism/places?keyword=경복궁",
+      "/tourism/search?keyword=경복궁",
+      "/tourism/places?areaCode=1",
       "/tourism/places/126508",
       "/tourism/places/126508/images",
     ])("인증 없이 %s 를 호출하면 401", async (path) => {
@@ -118,10 +119,10 @@ describe("Tourism 프록시 (e2e)", () => {
     });
   });
 
-  describe("GET /tourism/places", () => {
+  describe("GET /tourism/search", () => {
     it("키워드로 검색한다", async () => {
       const body = await spec()
-        .get("/tourism/places")
+        .get("/tourism/search")
         .withQueryParams({ keyword: "경복궁" })
         .withBearerToken(token)
         .expectStatus(200)
@@ -131,6 +132,46 @@ describe("Tourism 프록시 (e2e)", () => {
       expect(places).toHaveLength(2);
     });
 
+    it("limit 으로 개수를 줄인다", async () => {
+      const body = await spec()
+        .get("/tourism/search")
+        .withQueryParams({ keyword: "경복궁", limit: 1 })
+        .withBearerToken(token)
+        .expectStatus(200)
+        .returns("res.body");
+
+      expect(z.array(ktoListItemSchema).parse(body)).toHaveLength(1);
+    });
+
+    // pactum 의 withQueryParams 는 빈 객체를 거부해 쿼리 없이 직접 호출한다
+    it("키워드가 없으면 400", async () => {
+      await spec()
+        .get("/tourism/search")
+        .withBearerToken(token)
+        .expectStatus(400);
+    });
+
+    it.each([
+      ["공백뿐인 키워드", { keyword: "   " }],
+      ["limit 상한 초과", { keyword: "경복궁", limit: 51 }],
+    ])("%s 이면 400", async (_name, query) => {
+      await spec()
+        .get("/tourism/search")
+        .withQueryParams(query)
+        .withBearerToken(token)
+        .expectStatus(400);
+    });
+
+    it("상류 장애는 502", async () => {
+      await spec()
+        .get("/tourism/search")
+        .withQueryParams({ keyword: "boom" })
+        .withBearerToken(token)
+        .expectStatus(502);
+    });
+  });
+
+  describe("GET /tourism/places", () => {
     it("지역 코드로 검색한다", async () => {
       const body = await spec()
         .get("/tourism/places")
@@ -142,10 +183,10 @@ describe("Tourism 프록시 (e2e)", () => {
       expect(z.array(ktoListItemSchema).parse(body)[0]?.areaCode).toBe("1");
     });
 
-    it("limit 으로 개수를 줄인다", async () => {
+    it("시군구 없이 시·도만으로도 검색한다", async () => {
       const body = await spec()
         .get("/tourism/places")
-        .withQueryParams({ keyword: "경복궁", limit: 1 })
+        .withQueryParams({ areaCode: "1" })
         .withBearerToken(token)
         .expectStatus(200)
         .returns("res.body");
@@ -154,7 +195,7 @@ describe("Tourism 프록시 (e2e)", () => {
     });
 
     // pactum 의 withQueryParams 는 빈 객체를 거부해 쿼리 없이 직접 호출한다
-    it("키워드도 지역도 없으면 400 — 전체 조회는 제공하지 않는다", async () => {
+    it("지역 코드가 없으면 400 — 전체 조회는 제공하지 않는다", async () => {
       await spec()
         .get("/tourism/places")
         .withBearerToken(token)
@@ -162,23 +203,14 @@ describe("Tourism 프록시 (e2e)", () => {
     });
 
     it.each([
-      ["둘 다 있음", { keyword: "경복궁", areaCode: "1" }],
       ["지역 없이 시군구만", { sigunguCode: "23" }],
-      ["limit 상한 초과", { keyword: "경복궁", limit: 51 }],
+      ["limit 상한 초과", { areaCode: "1", limit: 51 }],
     ])("%s 이면 400", async (_name, query) => {
       await spec()
         .get("/tourism/places")
         .withQueryParams(query)
         .withBearerToken(token)
         .expectStatus(400);
-    });
-
-    it("상류 장애는 502", async () => {
-      await spec()
-        .get("/tourism/places")
-        .withQueryParams({ keyword: "boom" })
-        .withBearerToken(token)
-        .expectStatus(502);
     });
   });
 

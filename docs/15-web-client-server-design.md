@@ -165,15 +165,15 @@ ambient authority(쿠키)를 새로 도입하므로 검토가 필요하다.
 
 ```
 GET /tourism/areas
-GET /tourism/places?keyword=&limit=                 키워드 검색
+GET /tourism/search?keyword=&limit=                 키워드 검색
 GET /tourism/places?areaCode=&sigunguCode=&limit=   지역 검색
 GET /tourism/places/:contentId
 GET /tourism/places/:contentId/images
 ```
 
-`keyword` 와 `areaCode` 는 **배타적**이다 — 둘 다 오거나 둘 다 없으면 400. `/places/search` 처럼
-라우트를 나누지 않은 이유는 `:contentId` 와 선언 순서에 의존하는 모호성이 생기기 때문이고,
-단일 라우트에 XOR refine 을 걸면 그 모호성이 원천 제거된다. `limit` 은 1..50, 기본 5.
+키워드와 지역은 **경로로 나뉜다.** `/tourism/search` 는 `places` 의 형제 경로라
+`places/:contentId` 와 선언 순서로 충돌하지 않는다 (충돌하는 것은 `/places/search` 쪽이다).
+`keyword` 와 `areaCode` 는 각 경로에서 필수이고, `limit` 은 1..50, 기본 5.
 `contentId` 는 숫자 형식만 통과한다(아니면 400).
 
 실패 매핑: 상류 오류 → 502, 타임아웃 → 504, 결과 없음(상세) → 404, 미설정 → 503.
