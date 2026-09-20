@@ -114,7 +114,6 @@ class FakeRefreshTokens implements RefreshTokens {
 }
 
 const kakaoStub: KakaoVerifier = {
-  exchangeAuthorizationCode: vi.fn().mockResolvedValue("kakao-token"),
   verifyAccessToken: vi.fn().mockResolvedValue({ kakaoUserId: "999" }),
 };
 
@@ -130,22 +129,6 @@ describe("AuthService", () => {
   });
 
   describe("loginWithKakao", () => {
-    it("웹 authorization code를 access token으로 교환한 뒤 같은 카카오 로그인 흐름을 사용한다", async () => {
-      const result = await service.loginWithKakaoCode({
-        code: "authorization-code",
-        redirectUri: "https://tripic.example/auth/kakao/callback",
-        restApiKey: "rest-api-key",
-      });
-
-      expect(kakaoStub.exchangeAuthorizationCode).toHaveBeenCalledWith({
-        code: "authorization-code",
-        redirectUri: "https://tripic.example/auth/kakao/callback",
-        restApiKey: "rest-api-key",
-      });
-      expect(result.user.id).toBe("user-1");
-      expect(result.refreshToken).toBeTruthy();
-    });
-
     it("신규 카카오 계정이면 유저를 생성하고 isNewUser=true + refresh 토큰 발급", async () => {
       const result = await service.loginWithKakao("kakao-token");
 

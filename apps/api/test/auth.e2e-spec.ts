@@ -24,9 +24,6 @@ import {
 
 /** 카카오 API stub — "valid-<id>" 형태의 토큰만 통과시킨다 (port 교체, CLAUDE.md) */
 const kakaoStub: KakaoVerifier = {
-  async exchangeAuthorizationCode({ code }) {
-    return code;
-  },
   async verifyAccessToken(token: string) {
     if (!token.startsWith("valid-")) {
       throw new UnauthorizedException("invalid kakao token");

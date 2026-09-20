@@ -7,8 +7,7 @@ import type { Env } from "@/config/env";
 const APP_ID = 123456;
 
 const configStub = {
-  get: (key: string) =>
-    ({ KAKAO_APP_ID: APP_ID, KAKAO_CLIENT_SECRET: "client-secret" })[key],
+  get: (key: string) => (key === "KAKAO_APP_ID" ? APP_ID : undefined),
 } as unknown as ConfigService<Env, true>;
 
 const jsonResponse = (status: number, body: unknown) =>
@@ -34,33 +33,6 @@ describe("KakaoApiAdapter", () => {
     await expect(service.verifyAccessToken("token")).resolves.toEqual({
       kakaoUserId: "999",
     });
-  });
-
-  it("웹 authorization code를 카카오 access token으로 교환한다", async () => {
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValue(
-        jsonResponse(200, { access_token: "web-access-token" }),
-      );
-    vi.stubGlobal("fetch", fetchMock);
-
-    const service = new KakaoApiAdapter(configStub);
-    await expect(
-      service.exchangeAuthorizationCode({
-        code: "authorization-code",
-        redirectUri: "https://tripic.example/auth/kakao/callback",
-        restApiKey: "rest-api-key",
-      }),
-    ).resolves.toBe("web-access-token");
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://kauth.kakao.com/oauth/token",
-      expect.objectContaining({ method: "POST" }),
-    );
-    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
-    expect(String(request.body)).toContain("grant_type=authorization_code");
-    expect(String(request.body)).toContain("client_id=rest-api-key");
-    expect(String(request.body)).toContain("client_secret=client-secret");
   });
 
   it("app_id가 다르면 401 (타 카카오 앱 토큰 차단)", async () => {

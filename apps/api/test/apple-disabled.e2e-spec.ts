@@ -27,9 +27,6 @@ vi.hoisted(() => {
 });
 
 const kakaoStub: KakaoVerifier = {
-  async exchangeAuthorizationCode({ code }) {
-    return code;
-  },
   async verifyAccessToken(token: string) {
     if (!token.startsWith("valid-")) {
       throw new UnauthorizedException("invalid kakao token");
