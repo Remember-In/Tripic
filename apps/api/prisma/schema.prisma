@@ -181,11 +181,16 @@ model RecordPlace {
   areaCode     String
   sigunguCode  String?
   categoryCode String?
-  visitedAt    DateTime
+  // 사용자가 확정한 방문일 — 시간 없이 날짜 단위 (docs/16 §2.1).
+  // datetime 으로 두면 같은 날 같은 곳이 시각 차이로 다른 행이 되어 아래 unique 가 무력해지고,
+  // 타임존 때문에 지도 집계가 하루씩 어긋난다.
+  visitedAt    DateTime @db.Date
   createdAt    DateTime @default(now())
 
   @@index([recordId])
   // 지역별 조회 · 방문 시군구 진행률(distinct sigungu) 집계용
   @@index([areaCode, sigunguCode])
+  // 같은 기록에 같은 관광지를 같은 날 두 번 담지 않는다 (docs/16 §3.1)
+  @@unique([recordId, ktoContentId, visitedAt])
   @@map("record_places")
 }
