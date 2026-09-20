@@ -6,6 +6,10 @@ import type { JwtService } from "@nestjs/jwt";
 import { AuthService } from "@/auth/auth.service";
 import type { KakaoVerifier } from "@/auth/ports/kakao-verifier.port";
 import type {
+  KakaoAuthClient,
+  KakaoCodeExchange,
+} from "@/auth/ports/kakao-auth-client.port";
+import type {
   AuthAccount,
   AuthAccounts,
   SocialIdentity,
@@ -117,15 +121,39 @@ const kakaoStub: KakaoVerifier = {
   verifyAccessToken: vi.fn().mockResolvedValue({ kakaoUserId: "999" }),
 };
 
+/** code → 교환된 access token. 등록되지 않은 code 는 카카오가 거부한 것으로 본다 */
+class FakeKakaoAuthClient implements KakaoAuthClient {
+  codes = new Map<string, string>([["web-code", "kakao-token"]]);
+  exchanged: KakaoCodeExchange[] = [];
+
+  async exchangeAuthorizationCode(input: KakaoCodeExchange) {
+    this.exchanged.push(input);
+    const kakaoAccessToken = this.codes.get(input.code);
+    if (!kakaoAccessToken) {
+      throw new UnauthorizedException("invalid kakao authorization code");
+    }
+    return { kakaoAccessToken };
+  }
+}
+
 describe("AuthService", () => {
   let accounts: FakeAuthAccounts;
   let tokens: FakeRefreshTokens;
+  let kakaoAuth: FakeKakaoAuthClient;
   let service: AuthService;
 
   beforeEach(() => {
     accounts = new FakeAuthAccounts();
     tokens = new FakeRefreshTokens();
-    service = new AuthService(kakaoStub, accounts, tokens, jwtStub, configStub);
+    kakaoAuth = new FakeKakaoAuthClient();
+    service = new AuthService(
+      kakaoStub,
+      kakaoAuth,
+      accounts,
+      tokens,
+      jwtStub,
+      configStub,
+    );
   });
 
   describe("loginWithKakao", () => {
@@ -165,6 +193,56 @@ describe("AuthService", () => {
 
       expect(kakao.isNewUser).toBe(true);
       expect(kakao.user.id).not.toBe(apple.account.userId);
+    });
+  });
+
+  /** 웹은 access token 을 만들 수 없어 code 를 보낸다 — 서버가 교환한다 (docs/15 §2) */
+  describe("loginWithKakaoWebCode", () => {
+    const input = {
+      code: "web-code",
+      redirectUri: "https://tripic.example/auth/kakao/callback",
+    };
+
+    it("신규 카카오 계정이면 유저를 생성하고 isNewUser=true + refresh 토큰 발급", async () => {
+      const result = await service.loginWithKakaoWebCode(input);
+
+      expect(result.isNewUser).toBe(true);
+      expect(result.user.nickname).toBeNull();
+      expect(result.accessToken).toBe("signed.jwt");
+      expect(await tokens.findByHash(sha256(result.refreshToken))).toBeTruthy();
+    });
+
+    it("code 와 redirectUri 를 그대로 교환 port 에 넘긴다", async () => {
+      await service.loginWithKakaoWebCode(input);
+
+      expect(kakaoAuth.exchanged).toEqual([input]);
+    });
+
+    it("같은 카카오 계정이면 네이티브 로그인과 같은 사용자다 — 경로가 갈라지지 않는다", async () => {
+      const native = await service.loginWithKakao("kakao-token");
+
+      const web = await service.loginWithKakaoWebCode(input);
+
+      expect(web.isNewUser).toBe(false);
+      expect(web.user.id).toBe(native.user.id);
+    });
+
+    it("교환에 실패하면 401 을 그대로 전파하고 계정을 만들지 않는다", async () => {
+      await expect(
+        service.loginWithKakaoWebCode({ ...input, code: "expired-code" }),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(accounts.accounts.size).toBe(0);
+    });
+
+    it("로그인마다 새 rotation family 를 시작한다", async () => {
+      const first = await service.loginWithKakaoWebCode(input);
+      const second = await service.loginWithKakaoWebCode(input);
+
+      const firstRow = await tokens.findByHash(sha256(first.refreshToken));
+      const secondRow = await tokens.findByHash(sha256(second.refreshToken));
+
+      expect(firstRow?.familyId).toBeDefined();
+      expect(firstRow?.familyId).not.toBe(secondRow?.familyId);
     });
   });
 

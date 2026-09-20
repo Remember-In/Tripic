@@ -2,11 +2,19 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Inject, Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
-import type { AuthTokens, SocialLoginResult } from "@tripic/shared";
+import type {
+  AuthTokens,
+  KakaoWebLoginInput,
+  SocialLoginResult,
+} from "@tripic/shared";
 import {
   KAKAO_VERIFIER,
   type KakaoVerifier,
 } from "@/auth/ports/kakao-verifier.port";
+import {
+  KAKAO_AUTH_CLIENT,
+  type KakaoAuthClient,
+} from "@/auth/ports/kakao-auth-client.port";
 import {
   AUTH_ACCOUNTS,
   type AuthAccount,
@@ -31,6 +39,7 @@ export class AuthService implements SessionIssuer {
 
   constructor(
     @Inject(KAKAO_VERIFIER) private readonly kakao: KakaoVerifier,
+    @Inject(KAKAO_AUTH_CLIENT) private readonly kakaoAuth: KakaoAuthClient,
     @Inject(AUTH_ACCOUNTS) private readonly accounts: AuthAccounts,
     @Inject(REFRESH_TOKENS) private readonly tokens: RefreshTokens,
     private readonly jwt: JwtService,
@@ -52,6 +61,21 @@ export class AuthService implements SessionIssuer {
       providerUserId: kakaoUserId,
     });
     return this.startSession(account, isNewUser);
+  }
+
+  /**
+   * POST /auth/kakao/web — authorization code 를 교환한 뒤 로그인(없으면 가입) (docs/15 §2).
+   *
+   * 교환한 access token 을 네이티브와 같은 `loginWithKakao` 로 넘긴다.
+   * app_id 대조와 계정 생성 경로가 하나로 유지되어, 같은 카카오 계정이면
+   * 웹으로 들어오든 앱으로 들어오든 같은 사용자가 된다.
+   */
+  async loginWithKakaoWebCode(
+    input: KakaoWebLoginInput,
+  ): Promise<SocialLoginResult> {
+    const { kakaoAccessToken } =
+      await this.kakaoAuth.exchangeAuthorizationCode(input);
+    return this.loginWithKakao(kakaoAccessToken);
   }
 
   /** 소셜 계정 확인이 끝난 사용자에게 세션을 발급한다 — 카카오·Apple 로그인 공통 */

@@ -19,6 +19,17 @@ export const appleLoginSchema = z.object({
 });
 export type AppleLoginInput = z.infer<typeof appleLoginSchema>;
 
+/**
+ * POST /auth/kakao/web — 카카오가 redirect 로 돌려준 authorization code 를 서버가 교환한다 (docs/15 §2).
+ * 네이티브(`kakaoLoginSchema`)와 달리 앱이 access token 을 만들 수 없으므로 code 를 그대로 보낸다.
+ */
+export const kakaoWebLoginSchema = z.object({
+  code: z.string().min(1),
+  /** 카카오 인가 요청에 쓴 것과 같은 값 — 서버가 허용목록과 대조한다 */
+  redirectUri: z.url(),
+});
+export type KakaoWebLoginInput = z.infer<typeof kakaoWebLoginSchema>;
+
 /** POST /auth/apple/notifications — Apple 서버가 보내는 서명된 알림 (docs/14 §4) */
 export const appleNotificationSchema = z.object({
   payload: z.string().min(1),
@@ -61,6 +72,23 @@ export type SocialLoginResult = z.infer<typeof socialLoginResultSchema>;
 /** 카카오 로그인 응답 — 공통 응답과 같다. 기존 앱 코드 호환을 위해 이름을 유지한다 */
 export const kakaoLoginResultSchema = socialLoginResultSchema;
 export type KakaoLoginResult = SocialLoginResult;
+
+/**
+ * 웹 세션 응답 (docs/15 §3) — refresh token 은 본문이 아니라 HttpOnly 쿠키로 내려간다.
+ * 웹은 localStorage 를 쓸 수 없으므로(XSS) 본문에서 아예 제거한다.
+ *
+ * 주의: 스키마는 여분 키를 조용히 버리므로 "본문에 refreshToken 이 없다"는
+ * parse 통과만으로 보장되지 않는다. e2e 에서 별도 단언으로 고정한다.
+ */
+export const webAuthTokensSchema = authTokensSchema.omit({
+  refreshToken: true,
+});
+export type WebAuthTokens = z.infer<typeof webAuthTokensSchema>;
+
+export const webSocialLoginResultSchema = socialLoginResultSchema.omit({
+  refreshToken: true,
+});
+export type WebSocialLoginResult = z.infer<typeof webSocialLoginResultSchema>;
 
 export const meSchema = authUserSchema.extend({
   /** 가입에 사용한 로그인 수단 — 설정 화면의 "카카오/Apple 계정으로 로그인됨" 표시용 */

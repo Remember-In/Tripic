@@ -17,6 +17,7 @@ import type {
   SocialIdentity,
 } from "@/auth/ports/auth-accounts.port";
 import type { KakaoVerifier } from "@/auth/ports/kakao-verifier.port";
+import type { KakaoAuthClient } from "@/auth/ports/kakao-auth-client.port";
 import type { ProviderTokenCipher } from "@/auth/ports/provider-token-cipher.port";
 import type {
   NewRefreshToken,
@@ -162,6 +163,12 @@ const unusedKakao: KakaoVerifier = {
   },
 };
 
+const unusedKakaoAuth: KakaoAuthClient = {
+  async exchangeAuthorizationCode() {
+    throw new Error("카카오는 이 테스트에서 쓰지 않는다");
+  },
+};
+
 describe("AppleAuthService", () => {
   let accounts: FakeAuthAccounts;
   let tokens: FakeRefreshTokens;
@@ -176,6 +183,7 @@ describe("AppleAuthService", () => {
     appleApi = new FakeAppleApi();
     const auth = new AuthService(
       unusedKakao,
+      unusedKakaoAuth,
       accounts,
       tokens,
       new JwtService({ secret: "unit-test-secret-0123456789abcdef" }),

@@ -103,3 +103,76 @@ describe("envSchema — Sign in with Apple", () => {
     ).toThrow();
   });
 });
+
+const KAKAO_WEB_KEYS = ["KAKAO_WEB_REST_API_KEY", "KAKAO_WEB_REDIRECT_URIS"];
+
+const withKakaoWeb = (overrides: Record<string, string | undefined> = {}) =>
+  validEnv({
+    KAKAO_WEB_REST_API_KEY: "kakao-rest-api-key",
+    KAKAO_WEB_REDIRECT_URIS: "https://tripic.example/auth/kakao/callback",
+    ...overrides,
+  });
+
+/** 웹 카카오 로그인 환경변수 계약 (docs/15 §2) — 잘못된 설정은 부팅 단계에서 막는다 */
+describe("envSchema — 웹 카카오 로그인", () => {
+  it("카카오 웹 값이 모두 올바르면 통과한다", () => {
+    expect(validateEnv(withKakaoWeb())).toMatchObject({
+      KAKAO_WEB_REST_API_KEY: "kakao-rest-api-key",
+    });
+  });
+
+  it("카카오 웹 값을 전부 비우면 통과한다 — 웹 로그인만 꺼진 채로 기동한다", () => {
+    expect(validateEnv(validEnv()).KAKAO_WEB_REST_API_KEY).toBeUndefined();
+  });
+
+  it.each(KAKAO_WEB_KEYS)(
+    "%s 하나만 빠진 일부 설정은 설정 실수로 보고 부팅 실패",
+    (key) => {
+      expect(() => validateEnv(withKakaoWeb({ [key]: undefined }))).toThrow();
+    },
+  );
+
+  it("KAKAO_WEB_CLIENT_SECRET 만 넣으면 부팅 실패 — REST 키 없이는 쓸 수 없다", () => {
+    expect(() =>
+      validateEnv(validEnv({ KAKAO_WEB_CLIENT_SECRET: "secret" })),
+    ).toThrow();
+  });
+
+  it("client secret 은 선택 항목이라 없어도 통과한다 — 카카오 콘솔에서 껐을 때", () => {
+    expect(validateEnv(withKakaoWeb()).KAKAO_WEB_CLIENT_SECRET).toBeUndefined();
+  });
+
+  it("redirect uri 목록을 쉼표로 나누고 공백을 정리해 받는다", () => {
+    const parsed = validateEnv(
+      withKakaoWeb({
+        KAKAO_WEB_REDIRECT_URIS:
+          "https://tripic.example/auth/kakao/callback , http://localhost:5173/auth/kakao/callback",
+      }),
+    );
+
+    expect(parsed.KAKAO_WEB_REDIRECT_URIS).toEqual([
+      "https://tripic.example/auth/kakao/callback",
+      "http://localhost:5173/auth/kakao/callback",
+    ]);
+  });
+
+  it("url 이 아닌 redirect uri 는 부팅 실패", () => {
+    expect(() =>
+      validateEnv(withKakaoWeb({ KAKAO_WEB_REDIRECT_URIS: "not-a-url" })),
+    ).toThrow();
+  });
+
+  it("http·https 가 아닌 redirect uri 는 부팅 실패 — javascript: 같은 스킴을 허용목록에 넣지 않는다", () => {
+    expect(() =>
+      validateEnv(
+        withKakaoWeb({ KAKAO_WEB_REDIRECT_URIS: "javascript:alert(1)" }),
+      ),
+    ).toThrow();
+  });
+
+  it("쉼표만 있는 빈 목록은 부팅 실패", () => {
+    expect(() =>
+      validateEnv(withKakaoWeb({ KAKAO_WEB_REDIRECT_URIS: " , " })),
+    ).toThrow();
+  });
+});
